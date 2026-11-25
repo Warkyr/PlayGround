@@ -1,545 +1,637 @@
-import { ENCOUNTERS, ITEMS, CHAPTERS, LORE } from './data.js';
+// story.js — all narrative scenes, chapter flow and story triggers
+import { ui } from './ui.js';
+import { audio } from './audio.js';
+import { CHAPTERS } from './data.js';
 
-const wait = (ms) => new Promise(res => setTimeout(res, ms));
+export const TITLE_EXIT = { titleExit: true };
 
-export const storyMethods = {
-  async talkTo(npc) {
-    if (this.storyBusy || this.dialogueActive) return;
-    this.storyBusy = true;
-    try {
-      switch (npc.id) {
-        case 'lyra':
-          await this.storyBetrayal();
-          break;
-        case 'darian':
-          await this.showDialogue([
-            { speaker: 'Darian', portrait: 'darian', mood: 'smile', text: 'Kael! Ainda vivo? Achei que a forja tivesse te engolido.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Quase. A forja tem mais compaixão que você.' },
-            { speaker: 'Darian', portrait: 'darian', mood: 'smile', text: 'Hoje tudo muda. Sinto isso no ar.' },
-            { narration: true, text: 'Ele sorri como quem já conhece o final da história.' }
-          ]);
-          break;
-        case 'maren':
-          this.unlockLore('heart');
-          await this.showDialogue([
-            { speaker: 'Dona Maren', portrait: 'elder', text: 'Kael, querido. Cuidado com o que brilha nesta noite.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'É só uma festa, Dona Maren.' },
-            { speaker: 'Dona Maren', portrait: 'elder', mood: 'sad', text: 'Foi numa festa que a Coroa encontrou o Coração de Valdoria. Desde então, toda luz tem uma sombra com fome.' }
-          ]);
-          break;
-        case 'tio':
-          await this.showDialogue([
-            { speaker: 'Tio', portrait: 'child', mood: 'smile', text: 'Kael! Quando eu crescer, vou ser ferreiro igual você!' },
-            { speaker: 'Kael', portrait: 'kael', mood: 'smile', text: 'É um bom ofício. Dá calo, mas não dá ordens.' },
-            { speaker: 'Tio', portrait: 'child', mood: 'smile', text: 'Ou herói. Herói dá menos bolhas.' }
-          ]);
-          break;
-        case 'nessa':
-          this.openShop('merchant');
-          break;
-        case 'guard':
-          await this.showDialogue([
-            { speaker: 'Guarda da Vila', portrait: 'guard', text: 'Circulando, ferreiro. A festa está bonita, mas amanhã alguém sempre paga a conta.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Filosófico. A Coroa paga o seu salário ou o seu silêncio?' }
-          ]);
-          break;
-        case 'mira_prison':
-          await this.showDialogue([
-            { speaker: 'Mira', portrait: 'mira', text: 'Fique perto de mim. Os corredores mudam quando os guardas ficam desesperados.' }
-          ]);
-          break;
-        case 'prisoner':
-          await this.showDialogue([
-            { speaker: 'Prisioneiro', portrait: 'prisoner', text: 'Você é o ferreiro, não é? Dizem que o Campeão te enterrou aqui por ciúme.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Dizem muita coisa.' },
-            { speaker: 'Prisioneiro', portrait: 'prisoner', text: 'Homens pequenos fazem coisas grandes quando têm medo. Lembre disso quando encontrar a coroa.' }
-          ]);
-          break;
-        case 'warden':
-          if (!this.flags.wardenDefeated) await this.storyWarden();
-          break;
-        case 'brann_forest':
-          if (!this.flags.wolvesDefeated) {
-            await this.showDialogue([
-              { speaker: 'Brann', portrait: 'brann', text: 'Não se aproxime, garoto. A matilha está com fome e eu não estou com paciência.' }
-            ]);
-          } else if (!this.flags.brannJoined) {
-            await this.storyBrannJoin();
-          }
-          break;
-        case 'wanderer':
-          await this.showDialogue([
-            { speaker: 'Viajante', portrait: 'wanderer', text: 'A Estrada das Cinzas não perdoa quem olha para trás. Siga em frente, ou fique e vire árvore.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Já fui árvore por três anos. Não recomendo.' }
-          ]);
-          break;
-        case 'mira_camp':
-          await this.showDialogue([
-            { speaker: 'Mira', portrait: 'mira', mood: 'sad', text: 'Eu tinha um irmão. Darian o chamou de traidor e o pendurou na ponte de Valdoria.' },
-            { speaker: 'Mira', portrait: 'mira', text: 'Não luto por vingança. Luto para que ninguém mais precise aprender a odiar para sobreviver.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Então vamos garantir que essa lição chegue ao trono.' }
-          ]);
-          break;
-        case 'brann_camp':
-          await this.storyDeparture();
-          break;
-        case 'orin':
-          this.unlockLore('heart');
-          this.unlockLore('lyra');
-          await this.showDialogue([
-            { speaker: 'Velho Orin', portrait: 'elder', text: 'A Coroa de Cinzas não foi feita para governar. Foi feita para conter o Coração.' },
-            { speaker: 'Velho Orin', portrait: 'elder', mood: 'sad', text: 'Quando uma pessoa coloca aquilo na cabeça, o Coração começa a responder ao que ela mais deseja. E desejo, meu jovem, é uma fome que nunca aprende a parar.' },
-            { speaker: 'Kael', portrait: 'kael', text: 'Lyra sempre quis mais. Eu só não sabia que "mais" custava um reino.' }
-          ]);
-          break;
-        case 'smith':
-          this.openForge();
-          break;
-        case 'merchant_camp':
-          this.openShop('merchant');
-          break;
-        case 'voss':
-          if (!this.flags.vossDefeated) await this.storyVoss();
-          break;
-        case 'darian_castle':
-          if (!this.flags.darianDefeated && this.flags.vossDefeated) await this.storyDarian();
-          break;
-        case 'lyra_castle':
-          if (!this.flags.lyraDefeated && this.flags.darianDefeated) await this.storyLyra();
-          break;
-        default:
-          await this.showDialogue([{ speaker: npc.name, portrait: npc.char, text: '...' }]);
-      }
-    } finally {
-      this.storyBusy = false;
-      this.updateControls();
-      this.updateInteractHint();
-    }
-  },
+const set = (g, flag, value = true) => { g.flags[flag] = value; };
 
-  async propAction(prop) {
-    if (this.storyBusy || this.dialogueActive) return;
-    if (prop.type === 'chest') {
-      if (this.openedChests.has(prop.id)) {
-        await this.showDialogue([{ narration: true, text: 'O baú está vazio. Só resta poeira e o cheiro de ferro velho.' }]);
-        return;
-      }
-      this.openedChests.add(prop.id);
-      const loot = prop.loot || {};
-      const parts = [];
-      if (loot.gold) { this.gold += loot.gold; parts.push(`${loot.gold} de ouro`); }
-      for (const [id, count] of Object.entries(loot)) {
-        if (id === 'gold') continue;
-        this.addItem(id, count);
-        parts.push(`${count}× ${ITEMS[id]?.name || id}`);
-      }
-      this.audio.sfx('chest');
-      this.updateHUD();
-      await this.showDialogue([{ narration: true, text: `O baú se abre com um estalo. Você encontra ${parts.join(' e ')}.` }]);
-      return;
-    }
-    if (prop.type === 'forge') { this.openForge(); return; }
-    if (prop.type === 'stall') { this.openShop('merchant'); return; }
-    if (prop.type === 'campfire') {
-      this.storyBusy = true;
-      this.healParty();
-      this.audio.sfx('heal');
-      await this.showDialogue([{ narration: true, text: 'O fogo estala. Por um instante, o grupo esquece o ferro, a coroa e o medo. PV e PM restaurados.' }]);
-      this.storyBusy = false;
-      return;
-    }
-    if (prop.type === 'bedroll') {
-      this.storyBusy = true;
-      this.healParty();
-      this.saveGame(true);
-      await this.showDialogue([{ narration: true, text: 'Kael dorme por algumas horas. O sonho é curto, mas o suficiente. PV e PM restaurados. Progresso salvo.' }]);
-      this.storyBusy = false;
-      return;
-    }
-    if (prop.type === 'shrine') {
-      this.storyBusy = true;
-      this.unlockLore('heart');
-      this.healParty();
-      this.audio.sfx('heal');
-      await this.showDialogue([
-        { narration: true, text: 'A pedra antiga pulsa sob suas mãos. Runas esquecidas sussurram um nome: Valdoria.' },
-        { narration: true, text: 'Uma luz morna percorre o grupo. PV e PM restaurados.' }
-      ]);
-      this.storyBusy = false;
-      return;
-    }
-    if (prop.type === 'stairs') {
-      if (!this.flags.wardenDefeated) {
-        await this.showDialogue([{ narration: true, text: 'A porta de ferro está selada. Só o Carcereiro Gorr carrega a chave.' }]);
-      } else {
-        await this.storyPrisonEscape();
-      }
-      return;
-    }
-    await this.showDialogue([{ narration: true, text: 'Não há nada de útil aqui.' }]);
-  },
-
-  unlockLore(id) {
-    if (!id || this.loreUnlocked.has(id)) return;
-    this.loreUnlocked.add(id);
-    this.showToast(`Diário atualizado: ${LORE[id]?.title || 'Nova entrada'}`);
-  },
-
-  async storyBetrayal() {
-    this.flags.betrayal = true;
-    this.audio.playMusic('prison');
-    await this.showDialogue([
-      { narration: true, text: 'A fonte canta baixinho. Lyra está de costas, o vestido escuro recortado pela luz das lanternas.' },
-      { speaker: 'Lyra', portrait: 'lyra', mood: 'smile', text: 'Kael. Você veio.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'smile', text: 'Eu prometi. Três anos na forja para pagar este anel.' },
-      { narration: true, text: 'Ele abre a caixa. O ouro ainda está quente do bolso.' },
-      { speaker: 'Lyra', portrait: 'lyra', mood: 'sad', text: 'Eu... não posso.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Não pode o quê?' },
-      { narration: true, text: 'Passos. Botas. Aço. Darian surge com quatro guardas da Coroa.' },
-      { speaker: 'Darian', portrait: 'darian', text: 'Kael Varyn, você está preso pelo roubo do Coração de Valdoria e pelo assassinato do capitão Soren.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'angry', text: 'O quê? Darian, isso é loucura. Eu estava na forja a noite inteira!' },
-      { speaker: 'Lyra', portrait: 'lyra', mood: 'sad', text: 'Eu vi você saindo da cripta. Sinto muito.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'sad', text: 'Lyra... por quê?' },
-      { speaker: 'Lyra', portrait: 'lyra', text: 'Porque você nunca entenderia. Você prefere uma vida pequena. Eu não.' },
-      { speaker: 'Darian', portrait: 'darian', mood: 'smile', text: 'Sempre o herói da história, não é? Hoje eu escrevo o final.' },
-      { narration: true, text: 'O punho de um guarda encontra a têmpora de Kael. O mundo vira ferro e escuridão.' }
-    ]);
-    this.audio.sfx('boss');
-    this.shake(24);
-    await this.flashWhite(260);
-    await wait(300);
-    this.showFade(true);
-    await wait(720);
-    this.chapter = 'prison';
-    this.setObjective('Sobreviva ao Abismo.');
-    this.startMap('prison', { x: 4, y: 8, dir: 'right' });
-    this.showFade(false);
-    await wait(350);
-    await this.chapterCard('prison');
-    await this.storyPrisonIntro();
-    this.saveGame(true);
-  },
-
-  async storyPrisonIntro() {
-    this.audio.playMusic('prison');
-    await this.showDialogue([
-      { narration: true, text: 'Três anos depois.' },
-      { narration: true, text: 'O Abismo não tem dias. Só turnos de dor, o gosto de ferro e o som de correntes que nunca param.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'sad', text: 'Ainda estou vivo. Isso já é uma forma de vingança.' },
-      { narration: true, text: 'Uma chave gira. A porta da cela se abre. Uma mulher de capuz escuro observa o corredor.' },
-      { speaker: 'Mira', portrait: 'mira', text: 'Kael Varyn. O ferreiro que se recusou a morrer.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Quem é você?' },
-      { speaker: 'Mira', portrait: 'mira', text: 'Mira. A pessoa que vai te tirar daqui antes que Gorr lembre de te matar.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Por que eu?' },
-      { speaker: 'Mira', portrait: 'mira', text: 'Porque Darian tem medo de você. E eu tenho interesse em tudo que assusta a Coroa.' }
-    ]);
-    this.addPartyMember('mira', this.party[0].level);
-    this.hiddenNpcs.add('mira_prison');
-    this.buildFollowers();
-    this.unlockLore('prison');
-    this.setObjective('Siga Mira e escape do Abismo.');
-    this.audio.sfx('levelup');
-    this.showToast('Mira entrou no grupo.');
-    this.updateHUD();
-    this.saveGame(true);
-  },
-
-  async storyPrisonGuard1() {
-    const result = await this.battleSequence(ENCOUNTERS.prison_guards_1, async () => {
-      this.flags.guard1Defeated = true;
-      await this.showDialogue([
-        { speaker: 'Kael', portrait: 'kael', text: 'Ainda sei segurar uma espada.' },
-        { speaker: 'Mira', portrait: 'mira', text: 'Bom. Vamos precisar de mais que isso.' },
-        { narration: true, text: 'Mira arranca um molho de chaves do cinto do guarda. O caminho para o portão se abre.' }
-      ]);
-      this.setObjective('Atravesse o corredor e alcance o portão de ferro.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyPrisonGuard2() {
-    const result = await this.battleSequence(ENCOUNTERS.prison_guards_2, async () => {
-      this.flags.guard2Defeated = true;
-      await this.showDialogue([
-        { speaker: 'Mira', portrait: 'mira', text: 'Gorr está no portão. Ele não vai abrir.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Então eu abro.' }
-      ]);
-      this.setObjective('Derrote o Carcereiro Gorr no portão leste.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyWarden() {
-    await this.showDialogue([
-      { speaker: 'Carcereiro Gorr', portrait: 'guard', text: 'Três anos, rato. E ainda não aprendeu a ficar quieto.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'angry', text: 'Três anos, Gorr. E você ainda não aprendeu a trancar a porta direito.' },
-      { speaker: 'Mira', portrait: 'mira', text: 'Kael. A chave está no cinto dele.' }
-    ]);
-    const result = await this.battleSequence(ENCOUNTERS.warden, async () => {
-      this.flags.wardenDefeated = true;
-      this.hiddenNpcs.add('warden');
-      await this.showDialogue([
-        { speaker: 'Carcereiro Gorr', portrait: 'guard', mood: 'sad', text: 'Você... não é mais o mesmo.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Não. E você vai lembrar disso.' },
-        { speaker: 'Mira', portrait: 'mira', text: 'A saída fica nas escadas do sudeste. Vamos.' }
-      ]);
-      this.setObjective('Alcance as escadas no sudeste do Abismo.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyPrisonEscape() {
-    if (!this.flags.wardenDefeated) {
-      await this.showDialogue([{ narration: true, text: 'A porta de ferro está selada. Só o Carcereiro Gorr carrega a chave.' }]);
-      return;
-    }
-    await this.showDialogue([
-      { speaker: 'Mira', portrait: 'mira', text: 'Lá fora é pior, sabe? A Coroa transformou o reino num cemitério.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Melhor um cemitério a céu aberto do que uma cela sem céu.' },
-      { narration: true, text: 'A porta range. O ar frio da noite entra pelos pulmões de Kael como uma lâmina.' }
-    ]);
-    this.flags.prisonEscaped = true;
-    this.showFade(true);
-    await wait(700);
-    this.chapter = 'forest';
-    this.startMap('forest', { x: 2, y: 9, dir: 'right' });
-    this.showFade(false);
-    await wait(350);
-    await this.chapterCard('forest');
-    await this.storyForestIntro();
-    this.saveGame(true);
-  },
-
-  async storyForestIntro() {
-    this.audio.playMusic('forest');
-    await this.showDialogue([
-      { narration: true, text: 'A Estrada das Cinzas. O reino que Kael conhecia virou um cemitério a céu aberto.' },
-      { narration: true, text: 'Árvores retorcidas, aldeias vazias, cinza onde antes havia trigo.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'sad', text: 'Lyra... Darian... o que vocês fizeram com Valdoria?' },
-      { speaker: 'Mira', portrait: 'mira', text: 'O que a Coroa sempre faz. Promete. Depois cobra.' }
-    ]);
-    this.setObjective('Siga pela Estrada das Cinzas até o acampamento da resistência.');
-  },
-
-  async storyWolves() {
-    const result = await this.battleSequence(ENCOUNTERS.wolves, async () => {
-      this.flags.wolvesDefeated = true;
-      await this.showDialogue([
-        { narration: true, text: 'Um assobio corta a noite. Um homem grande, de barba grisalha e martelo nas costas, emerge das árvores.' },
-        { speaker: 'Brann', portrait: 'brann', text: 'Boa luta, garoto. Mas barulho atrai coisa pior.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Quem é você?' },
-        { speaker: 'Brann', portrait: 'brann', text: 'Brann Kade. Resistência. E você é o fantasma que a Coroa mandou enterrar.' },
-        { speaker: 'Mira', portrait: 'mira', text: 'Ele é o ferreiro. O que Darian traiu.' },
-        { speaker: 'Brann', portrait: 'brann', text: 'Então a Coroa tem medo de ferreiros. Interessante.' }
-      ]);
-      this.setObjective('Fale com Brann, o veterano na estrada.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyBrannJoin() {
-    await this.showDialogue([
-      { speaker: 'Brann', portrait: 'brann', text: 'Darian virou Campeão da Coroa. Lyra é a Dama das Cinzas. E o Coração de Valdoria está drenando a vida do reino.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'angry', text: 'Eles vão pagar.' },
-      { speaker: 'Brann', portrait: 'brann', text: 'Cuidado com essa palavra, garoto. Vingança é uma chama que consome a mão. Justiça é a forja que molda o aço.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Então me ensine a forjar.' },
-      { speaker: 'Brann', portrait: 'brann', mood: 'smile', text: 'Ha! Gostei. Vamos. O acampamento fica a leste.' }
-    ]);
-    this.addPartyMember('brann');
-    this.hiddenNpcs.add('brann_forest');
-    this.buildFollowers();
-    this.flags.brannJoined = true;
-    this.unlockLore('resistance');
-    this.unlockLore('darian');
-    this.setObjective('Siga para leste até o acampamento da resistência.');
-    this.audio.sfx('levelup');
-    this.showToast('Brann entrou no grupo.');
-    this.updateHUD();
-    this.saveGame(true);
-  },
-
-  async storyEnterCamp() {
-    this.flags.campReached = true;
-    this.showFade(true);
-    await wait(700);
-    this.chapter = 'camp';
-    this.startMap('camp', { x: 4, y: 11, dir: 'right' });
-    this.showFade(false);
-    await wait(350);
-    await this.chapterCard('camp');
-    await this.storyCampIntro();
-    this.saveGame(true);
-  },
-
-  async storyCampIntro() {
-    this.audio.playMusic('camp');
-    await this.showDialogue([
-      { narration: true, text: 'Acampamento da Brasa. O último fogo livre de Valdoria.' },
-      { speaker: 'Brann', portrait: 'brann', text: 'Aqui ninguém é nobre. Só gente que decidiu não ajoelhar.' },
-      { speaker: 'Mira', portrait: 'mira', mood: 'smile', text: 'A forja está de pé. Nessa e Nessa.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Darian e Lyra estão no palácio. Eu vou até lá.' },
-      { speaker: 'Brann', portrait: 'brann', text: 'Não. Nós vamos. Descanse, compre, melhore sua lâmina. O palácio não vai fugir.' },
-      { narration: true, text: 'Use a forja, negocie com Nessa, descanse na fogueira e salve no saco de dormir. Quando estiver pronto, fale com Brann.' }
-    ]);
-    this.unlockLore('resistance');
-    this.setObjective('Prepare-se e fale com Brann para partir ao palácio.');
-  },
-
-  async storyDeparture() {
-    const choice = await this.showDialogue([
-      { speaker: 'Brann', portrait: 'brann', text: 'A Coroa está comemorando a Colheita de Cinzas. Todos os nobres estarão no salão. É agora ou nunca.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Então é agora.' },
-      { speaker: 'Brann', portrait: 'brann', text: 'Antes de marcharmos: o grupo está pronto?' },
-      { speaker: 'Brann', portrait: 'brann', choices: [
-        { text: 'Partir para o palácio', value: 'go' },
-        { text: 'Ainda preciso me preparar', value: 'stay' }
-      ], text: 'Diga a palavra, ferreiro.' }
-    ]);
-    if (choice !== 'go') {
-      this.showToast('A resistência espera. Fale com Brann quando estiver pronto.');
-      return;
-    }
-    this.flags.departed = true;
-    this.saveGame(true);
-    this.showFade(true);
-    await wait(700);
-    this.chapter = 'castle';
-    this.startMap('castle', { x: 16, y: 16, dir: 'up' });
-    this.showFade(false);
-    await wait(350);
-    await this.chapterCard('castle');
-    await this.storyCastleIntro();
-    this.saveGame(true);
-  },
-
-  async storyCastleIntro() {
-    this.audio.playMusic('castle');
-    await this.showDialogue([
-      { narration: true, text: 'Palácio da Coroa. O coração de Valdoria pulsa sob o trono como uma ferida aberta.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Três anos. Uma vida inteira.' },
-      { speaker: 'Mira', portrait: 'mira', text: 'Não olhe para o trono. Olhe para a saída.' },
-      { speaker: 'Brann', portrait: 'brann', text: 'Se morrermos, morremos de pé.' },
-      { speaker: 'Kael', portrait: 'kael', mood: 'smile', text: 'Prefiro não morrer. Mas obrigado pelo apoio.' }
-    ]);
-    this.setObjective('Avance pelo salão e derrote o Inquisidor Voss.');
-  },
-
-  async storyVoss() {
-    await this.showDialogue([
-      { speaker: 'Inquisidor Voss', portrait: 'voss', text: 'Kael Varyn. O morto que esqueceu de morrer.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'A Coroa não tolera milagres, é?' },
-      { speaker: 'Inquisidor Voss', portrait: 'voss', text: 'A Coroa não tolera nada. Ela apenas permite, por enquanto.' }
-    ]);
-    const result = await this.battleSequence(ENCOUNTERS.voss, async () => {
-      this.flags.vossDefeated = true;
-      this.hiddenNpcs.add('voss');
-      await this.showDialogue([
-        { speaker: 'Inquisidor Voss', portrait: 'voss', mood: 'sad', text: 'Você... não passa de cinza...' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Cinza fertiliza o chão.' },
-        { speaker: 'Mira', portrait: 'mira', text: 'Deixe-me cuidar dos ferimentos. Ainda falta o Campeão.' }
-      ]);
-      this.healParty();
-      this.audio.sfx('heal');
-      this.setObjective('Suba até o trono e enfrente Darian.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyDarian() {
-    if (this.flags.darianDefeated) return;
-    await this.showDialogue([
-      { narration: true, text: 'Darian desce do trono sem pressa. A armadura brilha como se tivesse sido feita para refletir apenas a luz dele.' },
-      { speaker: 'Darian', portrait: 'darian', mood: 'smile', text: 'Eu sabia que você voltaria. Você sempre foi previsível, Kael.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'E você sempre foi covarde com uma espada.' },
-      { speaker: 'Darian', portrait: 'darian', text: 'Eu construí um reino. Você construiu uma rebelião de mendigos.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Eu construí algo que você nunca teve: gente que ficaria.' }
-    ]);
-    const result = await this.battleSequence(ENCOUNTERS.darian, async () => {
-      this.flags.darianDefeated = true;
-      this.hiddenNpcs.add('darian_castle');
-      await this.showDialogue([
-        { speaker: 'Darian', portrait: 'darian', mood: 'sad', text: 'Você... ainda acha que pode salvá-la?' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Não. Mas posso impedir que ela destrua mais gente.' },
-        { speaker: 'Darian', portrait: 'darian', text: 'Ela nunca te amou, sabia? Ela amava o que você representava.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Talvez. Mas eu amava quem eu era perto dela. E esse homem ainda está aqui.' },
-        { narration: true, text: 'A espada de Darian se parte. O Campeão cai. Acima do trono, a Coroa começa a pulsar.' }
-      ]);
-      this.healParty();
-      this.audio.sfx('heal');
-      this.setObjective('Enfrente Lyra no trono.');
-      this.saveGame(true);
-    });
-    return result;
-  },
-
-  async storyLyra() {
-    if (this.flags.lyraDefeated) return;
-    await this.showDialogue([
-      { narration: true, text: 'Lyra flutua acima do trono. O Coração de Valdoria brilha em seu peito como uma segunda lua.' },
-      { speaker: 'Lyra', portrait: 'lyra', text: 'Você veio pelo seu final de conto de fadas, Kael?' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Vim pelo fim dos seus.' },
-      { speaker: 'Lyra', portrait: 'lyra', text: 'Eu te amei. De verdade. Mas amar você era aceitar uma vida pequena.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'Não. Era aceitar que eu não era seu degrau.' },
-      { speaker: 'Lyra', portrait: 'lyra', mood: 'sad', text: 'A Coroa me mostrou o que eu poderia ser.' },
-      { speaker: 'Kael', portrait: 'kael', text: 'E olha no que você se tornou.' },
-      { narration: true, text: 'A Coroa se abre. As asas de cinza cobrem o salão. O ar vira brasa.' }
-    ]);
-    const result = await this.battleSequence(ENCOUNTERS.lyra, async () => {
-      this.flags.lyraDefeated = true;
-      this.hiddenNpcs.add('lyra_castle');
-      await this.showDialogue([
-        { narration: true, text: 'O Coração racha. Lyra cai de joelhos, o vestido apagado, a coroa partida ao meio.' },
-        { speaker: 'Lyra', portrait: 'lyra', mood: 'sad', text: 'Kael... eu... não consigo sentir mais nada.' },
-        { speaker: 'Kael', portrait: 'kael', mood: 'sad', text: 'Eu sei. Eu também passei três anos assim.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'A diferença é que eu escolhi sentir de novo.' }
-      ]);
-      const choice = await this.showDialogue([
-        { speaker: 'Lyra', portrait: 'lyra', mood: 'sad', text: 'O que você vai fazer comigo?' },
-        { speaker: 'Kael', portrait: 'kael', choices: [
-          { text: 'Poupar Lyra', value: 'spare' },
-          { text: 'Entregá-la à justiça', value: 'justice' }
-        ], text: 'A Coroa ainda sussurra. Kael sente o peso do trono em seus ombros.' }
-      ]);
-      this.endingChoice = choice || 'spare';
-      await this.showDialogue([
-        { narration: true, text: 'O Coração tenta falar. Promete poder. Promete um reino. Promete apagar toda a dor.' },
-        { speaker: 'Kael', portrait: 'kael', text: 'Não. Eu já tenho o que importa.' },
-        { narration: true, text: 'Ele ergue a espada e parte a Coroa de Cinzas. O som é de vidro e de corrente quebrando.' }
-      ]);
-      await this.showEnding();
-    });
-    return result;
-  },
-
-  async showEnding() {
-    this.flags.completed = true;
-    this.scene = 'ending';
-    this.storyBusy = true;
-    this.el.hud.classList.add('hidden');
-    this.el.touch.classList.add('hidden');
-    this.el.interactHint.classList.remove('visible');
-    this.deleteSave();
-    const spared = this.endingChoice === 'spare';
-    const epilogue = spared
-      ? 'Lyra viveu. Não como rainha, não como lenda — como uma mulher que precisou aprender a olhar para o próprio reflexo. Darian respondeu por cada crime diante do povo de Valdoria.\n\nKael recusou o trono. Disse que coroas são forjadas para pesar, e ele já carregava o suficiente.\n\nBruma foi reconstruída. Na praça, ergueram uma estátua de um ferreiro sem coroa, a espada voltada para o amanhecer.\n\nDizem que, nas noites de inverno, uma luz ainda arde na velha forja. E que o Cavaleiro das Cinzas nunca deixou de responder quando o povo chamou.'
-      : 'Lyra foi julgada diante do povo de Valdoria. Não houve perdão fácil, nem esquecimento. Houve testemunhas, nomes e a verdade dita em voz alta.\n\nDarian respondeu por cada crime. A Coroa foi partida e o Coração, enterrado onde nenhuma mão gananciosa pudesse alcançar.\n\nKael recusou o trono. Disse que coroas são forjadas para pesar, e ele já carregava o suficiente.\n\nBruma foi reconstruída. Na praça, ergueram uma estátua de um ferreiro sem coroa, a espada voltada para o amanhecer.\n\nDizem que, nas noites de inverno, uma luz ainda arde na velha forja. E que o Cavaleiro das Cinzas nunca deixou de responder quando o povo chamou.';
-    this.el.endingText.textContent = epilogue;
-    const minutes = Math.max(1, Math.round(this.playTime / 60));
-    const maxLevel = Math.max(...this.party.map(m => m.level));
-    this.el.endingStats.innerHTML = `
-      <span><b>${maxLevel}</b>Nível máximo</span>
-      <span><b>${this.battlesWon}</b>Batalhas</span>
-      <span><b>${minutes} min</b>Jornada</span>
-      <span><b>${spared ? 'Poupar' : 'Justiça'}</b>Escolha final</span>
-    `;
-    this.el.ending.classList.remove('hidden');
-    this.audio.playMusic('title');
-    this.updateControls();
-    this.updateTitleScreen();
+async function lines(list) {
+  for (const l of list) {
+    if (Array.isArray(l)) await ui.say(l[0], l[1], l[2]);
+    else await ui.say('Narrador', l);
   }
+}
+
+async function fight(g, ctx, ids, opts = {}) {
+  const res = await ctx.battle(ids, opts);
+  if (res === 'title') throw TITLE_EXIT;
+  return res;
+}
+
+async function finalBattle(g, ctx) {
+  if (g.flags.finalStarted) return;
+  set(g, 'finalStarted');
+  await lines([
+    ['Dorian', 'Aí está. O lenhador que virou lenda. A lenda que virou praga.'],
+    ['Kael', 'Acabou, Dorian.'],
+    ['Dorian', 'Acabou? Eu peguei um reino faminto e dei a ele um inimigo. Peguei uma garota assustada e dei a ela um propósito. Você só sabe destruir.'],
+    ['Lyra', 'Você me deu uma corrente e chamou de propósito.'],
+    ['Dorian', 'Lyra. Ainda defendendo o homem que te esqueceu?'],
+    ['Kael', 'Eu nunca esqueci. Só parei de correr atrás do passado.'],
+    ['Dorian', 'Então me mostre o futuro.'],
+  ]);
+  await fight(g, ctx, ['dorian', 'wraith'], {
+    boss: true, bg: 'castle', canFlee: false,
+    intro: 'Dorian ergue a Brasa Eterna. O trono se incendeia.',
+  });
+  set(g, 'dorianDown');
+  await lines([
+    ['Dorian', 'Você... ainda não entende. A Brasa não pode ser apagada. Ela só troca de dono.'],
+    ['Lyra', 'Então eu serei a última.'],
+    ['Narrador', 'Lyra segura a Lâmina Aurora. A Brasa Eterna grita — um som que atravessa pedra, carne e memória. E então... silêncio.'],
+    ['Dorian', 'Eu só queria... que alguém lembrasse de mim.'],
+    ['Kael', 'Eu lembro. É por isso que não vou te perdoar.'],
+  ]);
+  const choice = await ui.choice('O que Kael leva consigo?', [
+    { label: 'Perdoar Lyra. Recomeçar.', value: 'forgive' },
+    { label: 'Seguir em frente. Sozinho.', value: 'leave' },
+  ]);
+  set(g, 'forgaveLyra', choice === 'forgive');
+  set(g, 'completed');
+  g.completed = true;
+  await ui.ending(g);
+  return 'title';
+}
+
+const SCRIPTS = {
+  // ------------------------------------------------------------ CHAPTER I
+  async village_intro(g, ctx) {
+    if (g.flags.introDone) return;
+    set(g, 'introDone');
+    ctx.chapter(0);
+    await ui.chapterCard(CHAPTERS[0]);
+    await lines([
+      ['Narrador', 'Brumalva cheira a trigo e fumaça doce. É o Festival da Colheita, e pela primeira vez em três anos Kael tem motivos para sorrir.'],
+      ['Kael', 'Se eu demorar mais, Lyra vai jogar minha torta no rio.'],
+      ['Narrador', 'Ele não sabe que esta será a última noite em que chamará este lugar de lar.'],
+    ]);
+    ctx.quest('Encontre Lyra no centro da vila.');
+  },
+
+  async lyra_festival(g, ctx) {
+    if (g.flags.talkedLyra) {
+      await lines([
+        ['Lyra', 'Dorian está no norte da praça. E Kael... não demore. Quero conversar depois do festival.'],
+      ]);
+      return;
+    }
+    set(g, 'talkedLyra');
+    await lines([
+      ['Lyra', 'Você veio! Achei que ia passar o festival consertando cercas.'],
+      ['Kael', 'Consertei a cerca. Depois a ponte. Depois o telhado do Tolan — e ele ainda me deve três moedas.'],
+      ['Lyra', 'Você é impossível.'],
+      ['Kael', 'E ainda assim você está aqui.'],
+      ['Lyra', 'Ainda estou com o medalhão. Não tiro nem para dormir.'],
+      ['Narrador', 'Ela toca o pingente de prata no peito. O metal brilha como se guardasse o calor dela.'],
+      ['Lyra', 'Dorian estava procurando você. Disse que tem algo para mostrar no Santuário da Brasa, ao norte.'],
+      ['Kael', 'Dorian sempre tem algo para mostrar.'],
+      ['Lyra', 'Kael... depois do festival, quero conversar. Sobre nós.'],
+    ]);
+    ctx.quest('Fale com Dorian, no norte da vila.');
+  },
+
+  async dorian_village(g, ctx) {
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Dorian', 'Ao anoitecer, no Santuário. Não conte a ninguém. Nem a Lyra.'],
+      ]);
+      return;
+    }
+    set(g, 'festivalDone');
+    await lines([
+      ['Dorian', 'Kael! O herói do festival. Ainda tem farinha no cabelo.'],
+      ['Kael', 'É o preço da glória.'],
+      ['Dorian', 'Preciso te mostrar uma coisa no Santuário da Brasa. Algo que muda tudo. Ao anoitecer.'],
+      ['Kael', 'Você está estranho.'],
+      ['Dorian', 'Estou apenas... ansioso.'],
+      ['Narrador', 'Dorian sorri. É o mesmo sorriso de quando eram crianças. Por isso Kael não percebe o que há por trás dele.'],
+    ]);
+    ctx.quest('Investigue os uivos ao norte da vila.');
+  },
+
+  async elder_village(g, ctx) {
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Anciã Maeve', 'Ouvi uivos. A Brasa está inquieta. E Dorian anda perto do santuário demais para o meu gosto.'],
+        ['Kael', 'Dorian é meu amigo, Maeve.'],
+        ['Anciã Maeve', 'Amizade não é escudo, menino. É uma porta que a gente escolhe deixar aberta.'],
+      ]);
+      return;
+    }
+    await lines([
+      ['Anciã Maeve', 'Kael. Ainda carregando lenha para todo mundo?'],
+      ['Kael', 'Alguém precisa.'],
+      ['Anciã Maeve', 'A Brasa Eterna já ardeu por duzentos anos. Enquanto ela queimar, Brumalva não conhece inverno.'],
+      ['Kael', 'E se apagar?'],
+      ['Anciã Maeve', 'Aí o reino aprende o que é frio de verdade.'],
+    ]);
+  },
+
+  async merchant_village(g, ctx) {
+    await lines([
+      ['Tolan', 'Kael! Meu cliente favorito. E o único que me deve três moedas.'],
+      ['Kael', 'Considere um investimento no seu futuro.'],
+      ['Tolan', 'O futuro paga juros. Veja o que tenho.'],
+    ]);
+    await ctx.shop(['potion', 'potion2', 'ether', 'antidote', 'bomb', 'smoke'], 'Tolan · Mercador');
+  },
+
+  async child_village(g, ctx) {
+    await lines([
+      ['Pip', 'Kael! Kael! Você vai casar com a Lyra?'],
+      ['Kael', 'Quem foi que disse isso?'],
+      ['Pip', 'Todo mundo. Menos o Dorian. Ele fica com uma cara estranha quando falam dela.'],
+      ['Kael', 'Dorian é só... sério.'],
+      ['Pip', 'Sério é quem não sabe rir. Eu não confio em gente que não sabe rir.'],
+    ]);
+  },
+
+  async garrick_village(g, ctx) {
+    await lines([
+      ['Garrick', 'Então você é o lenhador que todos chamam de herói.'],
+      ['Kael', 'Eu só ajudo as pessoas.'],
+      ['Garrick', 'É o que todo herói diz antes de descobrir o preço.'],
+      ['Kael', 'Quem é você?'],
+      ['Garrick', 'Alguém que já escolheu errado. A espada não faz o homem, garoto. A escolha faz. Lembre disso quando o mundo pedir que você escolha.'],
+    ]);
+  },
+
+  async villager_village(g, ctx) {
+    const who = g.flags.festivalDone
+      ? 'Depois do festival, a vila fica quieta demais. Não gosto disso.'
+      : 'O festival deste ano está maior! A Brasa deve estar contente.';
+    await lines([['Narrador', who]]);
+  },
+
+  async guard_gate(g, ctx) {
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Guarda', 'Se for ao norte, leve aço. E não confie em sorrisos bonitos.'],
+      ]);
+    } else {
+      await lines([
+        ['Guarda', 'O portão norte fica fechado até o festival acabar. E ultimamente... há uivos no bosque.'],
+      ]);
+    }
+  },
+
+  async wolves_attack(g, ctx) {
+    if (g.flags.wolvesDone) return;
+    await lines([
+      ['Narrador', 'Um grito corta o festival. Duas crianças correm do bosque, perseguidas por lobos cinzentos.'],
+      ['Pip', 'Kael! Socorro!'],
+      ['Kael', 'Pip! Atrás de mim!'],
+    ]);
+    await fight(g, ctx, ['wolf', 'wolf'], {
+      bg: 'village', canFlee: false,
+      intro: 'Os lobos cercam as crianças. Kael ergue o que tem: coragem e um machado.',
+    });
+    set(g, 'wolvesDone');
+    set(g, 'northOpen');
+    ctx.give('potion', 2);
+    await lines([
+      ['Narrador', 'Os lobos recuam para a escuridão. As crianças choram, mas estão inteiras.'],
+      ['Pip', 'Você é o maior herói de Brumalva!'],
+      ['Kael', 'Hoje eu só quero que todo mundo volte para casa.'],
+    ]);
+    ctx.quest('Vá ao Santuário da Brasa, ao norte do bosque.');
+  },
+
+  async forest_night(g, ctx) {
+    if (g.flags.forestSeen) return;
+    set(g, 'forestSeen');
+    await lines([
+      ['Narrador', 'O bosque engole o som do festival. Entre as árvores, uma luz azul pulsa: o Santuário da Brasa.'],
+      ['Kael', 'Dorian disse ao anoitecer. Estranho... não há guardas.'],
+      ['Narrador', 'No silêncio, o medalhão de prata no bolso de Kael parece pesar mais.'],
+    ]);
+    ctx.quest('Entre no Santuário da Brasa.');
+  },
+
+  // ------------------------------------------------------------ CHAPTER II
+  async shrine_traitor(g, ctx) {
+    if (g.flags.traitorSeen) return;
+    set(g, 'traitorSeen');
+    ctx.chapter(1);
+    await ui.chapterCard(CHAPTERS[1]);
+    await lines([
+      ['Narrador', 'O Santuário está em silêncio. Sobre o altar, o pedestal da Brasa Eterna — vazio.'],
+      ['Dorian', 'Você demorou.'],
+      ['Kael', 'Dorian? O que aconteceu? Onde está a Brasa?'],
+      ['Dorian', 'Onde sempre esteve. Comigo.'],
+      ['Narrador', 'Dorian ergue a mão. Entre os dedos, uma chama dourada pulsa como um coração doente.'],
+      ['Kael', 'Você... roubou a Brasa?'],
+      ['Dorian', 'Roubei? Eu a salvei. Este reino apodrece sob um fogo que só aquece os ricos. Vou acender uma aurora nova.'],
+      ['Lyra', 'Kael, eu... eu sinto muito.'],
+      ['Kael', 'Lyra? Você sabia?'],
+      ['Lyra', 'Dorian disse que se eu não ajudasse, ele—'],
+      ['Dorian', 'Lyra fez o que precisava. Assim como você fará.'],
+      ['Narrador', 'Guardas saem das sombras. A lâmina de uma lança encosta nas costas de Kael.'],
+      ['Dorian', 'O lenhador que roubou a Brasa. A história se escreve sozinha.'],
+      ['Kael', 'Eu confiei em você. Nos dois.'],
+      ['Lyra', 'Não olhe para mim assim. Por favor.'],
+      ['Dorian', 'Três anos no Forte Abissal. Tempo suficiente para o mundo esquecer seu nome.'],
+      ['Narrador', 'O último som que Kael ouve antes da escuridão é o medalhão de prata caindo no chão.'],
+    ]);
+    set(g, 'betrayed');
+    set(g, 'brasaStolen');
+    if (g.inventory.locket) delete g.inventory.locket;
+    ctx.quest('Sobreviva ao Forte Abissal.');
+    await ctx.goto('prison', 7, 4, 'down', { fade: 700 });
+  },
+
+  // ------------------------------------------------------------ CHAPTER III
+  async prison_wake(g, ctx) {
+    if (g.flags.wokePrison) return;
+    set(g, 'wokePrison');
+    ctx.chapter(2);
+    await ui.chapterCard(CHAPTERS[2]);
+    await lines([
+      ['Narrador', 'Três anos. O abismo não tem dias, só o eco de uma gota caindo.'],
+      ['Kael', '...'],
+      ['Garrick', 'Ainda vivo, garoto?'],
+      ['Kael', 'Quem...?'],
+      ['Garrick', 'Garrick. Último cavaleiro da Velha Guarda. Pelo menos era, antes de Dorian me jogar aqui por fazer perguntas demais.'],
+      ['Kael', 'Dorian é o regente agora.'],
+      ['Garrick', 'E você é o ladrão que roubou a Brasa. Ouvi os guardas. A história é boa. Mentira bem contada.'],
+      ['Kael', 'Lyra... ela estava lá.'],
+      ['Garrick', 'A garota que você amava? Dorian a usa como usa todos. Mas não é isso que te mantém acordado, é?'],
+      ['Kael', 'Não.'],
+      ['Garrick', 'Bom. Ódio é combustível. Mas não é destino. Fale comigo. Temos tempo.'],
+    ]);
+    ctx.quest('Fale com Garrick.');
+  },
+
+  async garrick_cell(g, ctx) {
+    if (g.flags.garrickFree) {
+      await lines([['Garrick', 'A saída é para baixo, garoto. E cuidado com o que encontra pelo caminho.']]);
+      return;
+    }
+    set(g, 'garrickFree');
+    await lines([
+      ['Garrick', 'Quer sair daqui? Então me ouça. O carcereiro Groth tem a chave. E eu tenho um plano que exige duas pessoas e nenhuma dignidade.'],
+      ['Kael', 'Estou ouvindo.'],
+      ['Garrick', 'Dorian coroou-se regente. A Brasa Eterna está no castelo, e o povo de Brumalva passa fome enquanto ele vende milagres.'],
+      ['Kael', 'E Lyra?'],
+      ['Garrick', 'Viva. Perto dele. Não sei se por escolha ou por corrente. Se quiser respostas, precisamos sair.'],
+      ['Narrador', 'Garrick chuta a fechadura enferrujada. O metal range, cede, e a cela se abre.'],
+      ['Garrick', 'Ainda tenho um pouco de aço nos ossos. E você tem um nome para limpar.'],
+    ]);
+    ctx.join('garrick', 5);
+    ctx.give('potion2', 2);
+    set(g, 'cellOpen');
+    ctx.quest('Saia da cela e atravesse o Forte Abissal.');
+    await lines([
+      ['Kael', 'Por que me ajudar?'],
+      ['Garrick', 'Porque alguém precisa me lembrar que ainda sou um cavaleiro. E você precisa de alguém que saiba onde enfiar uma espada.'],
+    ]);
+  },
+
+  async prison_guards(g, ctx) {
+    if (g.flags.prisonGuardsDown) return;
+    await lines([
+      ['Guarda', 'Os ratos saíram da toca!'],
+      ['Garrick', 'Fica atrás de mim, garoto. Ou melhor... fica ao meu lado.'],
+    ]);
+    await fight(g, ctx, ['guard', 'guard'], {
+      bg: 'prison', canFlee: false,
+      intro: 'Guardas reais bloqueiam o corredor.',
+    });
+    set(g, 'prisonGuardsDown');
+    ctx.levelTo('kael', 4);
+    ctx.levelTo('garrick', 5);
+    await lines([
+      ['Kael', 'Você luta como se não sentisse dor.'],
+      ['Garrick', 'Sinto. Só não deixo ela decidir por mim.'],
+      ['Narrador', 'No fundo do corredor, uma porta de ferro se abre. O cheiro de carvão e suor anuncia o carcereiro.'],
+    ]);
+    ctx.quest('Encontre o Carcereiro Groth no salão leste.');
+  },
+
+  async prison_jailer(g, ctx) {
+    if (g.flags.jailerDown) return;
+    await lines([
+      ['Carcereiro Groth', 'O velho cavaleiro e o ladrão. Dorian pagou bem pela sua cabeça, Kael.'],
+      ['Kael', 'Então venha receber.'],
+      ['Carcereiro Groth', 'Eu quebrei homens maiores que você com uma mão.'],
+      ['Garrick', 'E eu ensinei esse garoto a não quebrar.'],
+    ]);
+    await fight(g, ctx, ['jailer', 'guard'], {
+      boss: true, bg: 'prison', canFlee: false,
+      intro: 'Groth ergue o clavão. O chão treme.',
+    });
+    set(g, 'jailerDown');
+    set(g, 'prisonEscape');
+    ctx.levelTo('kael', 5);
+    ctx.levelTo('garrick', 6);
+    await lines([
+      ['Narrador', 'Groth cai de joelhos. A chave do portão rola pelo chão.'],
+      ['Garrick', 'A saída leste. O portão dos fundos. Vamos.'],
+      ['Kael', 'E depois?'],
+      ['Garrick', 'Depois a gente decide o que fazer com a raiva.'],
+    ]);
+    ctx.quest('Fuja pelo portão leste do forte.');
+  },
+
+  async prison_escape(g, ctx) {
+    if (g.flags.escapedPrison) return;
+    set(g, 'escapedPrison');
+    await lines([
+      ['Narrador', 'O portão se abre para um vento que Kael não sentia há três anos. A neve do Pico do Amanhecer brilha como vidro.'],
+      ['Kael', 'Lá em cima... o Santuário da Aurora.'],
+      ['Garrick', 'A lenda diz que a primeira luz do amanhecer escolhe um portador. Se Dorian teme alguma coisa, é isso.'],
+    ]);
+    ctx.chapter(3);
+    await ui.chapterCard(CHAPTERS[3]);
+    ctx.quest('Atravesse o Pico do Amanhecer.');
+    await ctx.goto('mountain', 13, 18, 'up', { fade: 650 });
+  },
+
+  // ------------------------------------------------------------ CHAPTER IV
+  async mountain_mira(g, ctx) {
+    if (g.flags.metMira) return;
+    await lines([
+      ['Narrador', 'Um grito corta o vento. Uma maga de cabelo violeta recua diante de dois lobos glaciais.'],
+      ['Mira', 'Se vocês vão me comer, pelo menos esperem eu terminar o feitiço!'],
+      ['Kael', 'Garrick!'],
+      ['Garrick', 'Eu vejo. Vai!'],
+    ]);
+    await fight(g, ctx, ['icewolf', 'icewolf'], {
+      bg: 'snow',
+      intro: 'Lobos glaciais atacam a maga encurralada.',
+    });
+    set(g, 'metMira');
+    await lines([
+      ['Mira', 'Você... não é um soldado de Dorian, é?'],
+      ['Kael', 'Não.'],
+      ['Mira', 'Ótimo. Porque eu estava prestes a morrer feio. Sou Mira. Maga errante, sobrevivente da purga, especialista em piadas ruins.'],
+      ['Garrick', 'Nós vamos ao Santuário da Aurora.'],
+      ['Mira', 'Que coincidência. Eu também. Ouço vozes no gelo. E uma delas conhece seu nome, Kael.'],
+      ['Kael', 'Isso deveria me assustar?'],
+      ['Mira', 'Provavelmente. Mas assustar é o que o gelo faz melhor.'],
+    ]);
+    ctx.join('mira', 6);
+    ctx.levelTo('kael', 6);
+    ctx.levelTo('garrick', 6);
+    ctx.healAll(1);
+    ctx.quest('Chegue ao topo do Pico do Amanhecer.');
+  },
+
+  async mountain_sentinel(g, ctx) {
+    if (g.flags.sentinelDown) return;
+    await lines([
+      ['Narrador', 'Diante do portal de gelo, uma sentinela de pedra desperta. Runas azuis acendem em seu peito.'],
+      ['Sentinela de Pedra', 'AQUELE QUE CARREGA A AURORA NÃO PASSA.'],
+      ['Kael', 'Eu nem sei o que isso significa.'],
+      ['Mira', 'Significa que ela vai tentar nos matar. Levante a espada!'],
+    ]);
+    await fight(g, ctx, ['sentinel'], {
+      boss: true, bg: 'snow', canFlee: false,
+      intro: 'A Sentinela de Pedra desperta. O gelo racha sob seus pés.',
+    });
+    set(g, 'sentinelDown');
+    ctx.levelTo('kael', 7);
+    ctx.levelTo('garrick', 7);
+    ctx.levelTo('mira', 7);
+    await lines([
+      ['Narrador', 'A sentinela se desfaz em poeira de cristal. O portal permanece aberto, pulsando como uma ferida de luz.'],
+      ['Garrick', 'O portal... reconheceu você.'],
+      ['Mira', 'Ou reconheceu o que você carrega. Vamos logo, antes que eu comece a acreditar em destino.'],
+    ]);
+    ctx.quest('Entre no Santuário da Aurora.');
+  },
+
+  async temple_blessing(g, ctx) {
+    if (g.flags.blessed) return;
+    await lines([
+      ['Narrador', 'O Santuário da Aurora é feito de luz sólida. No centro, uma espada atravessada em pedra.'],
+      ['Mira', 'A Lâmina Aurora. Dizem que ela queima quem carrega mentiras.'],
+      ['Garrick', 'Então é uma boa hora para você admitir que roubou minha ração ontem.'],
+      ['Mira', 'Isso foi um empréstimo tático.'],
+      ['Narrador', 'Kael toca o punho. A luz não o queima. Ela o reconhece.'],
+      ['Kael', 'Eu não vim me tornar um herói. Vim impedir que Dorian transforme o reino em cinzas.'],
+      ['Voz da Aurora', 'Então seja a lâmina que não pede permissão ao fogo.'],
+      ['Narrador', 'A espada desliza da pedra. O santuário inteiro respira.'],
+    ]);
+    set(g, 'blessed');
+    ctx.give('aurora', 1);
+    ctx.levelTo('kael', 8);
+    ctx.levelTo('garrick', 8);
+    ctx.levelTo('mira', 8);
+    ctx.healAll(1);
+    ctx.chapter(4);
+    await ui.chapterCard(CHAPTERS[4]);
+    ctx.quest('Desça até Brumalva. A cidade está sob o jugo de Dorian.');
+    await lines([
+      ['Mira', 'Então é isso. O lenhador virou a lâmina.'],
+      ['Kael', 'Ainda sou o mesmo.'],
+      ['Garrick', 'Não. E é bom que não seja.'],
+    ]);
+  },
+
+  // ------------------------------------------------------------ CHAPTER V
+  async night_arrival(g, ctx) {
+    if (g.flags.nightArrived) return;
+    set(g, 'nightArrived');
+    await lines([
+      ['Narrador', 'Brumalva não tem mais festivais. As casas estão apagadas, e soldados de Dorian marcham sob bandeiras vermelhas.'],
+      ['Kael', 'O lugar onde eu cresci...'],
+      ['Mira', 'Olhe para eles. Não estão protegendo. Estão ocupando.'],
+      ['Garrick', 'A resistência deve estar nas ruínas ao sul. Maeve ainda vive?'],
+      ['Kael', 'Se alguém sobreviveu, é ela.'],
+    ]);
+    ctx.quest('Encontre a resistência de Brumalva.');
+  },
+
+  async night_elder(g, ctx) {
+    await lines([
+      ['Anciã Maeve', 'Kael? Pelos deuses... você está vivo.'],
+      ['Kael', 'Maeve. O que aconteceu?'],
+      ['Anciã Maeve', 'Dorian tomou o trono. A Brasa Eterna queima no castelo, mas não aquece mais as casas. Ele chama de ordem. Nós chamamos de fome.'],
+      ['Kael', 'E Lyra?'],
+      ['Anciã Maeve', 'Ela está no castelo. Dizem que é a voz dele. Dizem também que chora à noite. Não sei o que acreditar.'],
+      ['Anciã Maeve', 'Fale com Brann, nas ruínas. Ele tem um plano — e uma teimosia que vai te matar.'],
+    ]);
+    ctx.quest('Fale com Brann, o líder da resistência.');
+  },
+
+  async night_resistance(g, ctx) {
+    if (g.flags.talkedResistance) {
+      await lines([['Brann', 'Varek está no centro da vila. Quanto antes ele cair, antes a cidade respira.']]);
+      return;
+    }
+    set(g, 'talkedResistance');
+    await lines([
+      ['Brann', 'Então o fantasma do Forte Abissal voltou. Ouvi dizer que você matou o carcereiro com uma colher.'],
+      ['Kael', 'Foi uma colher grande.'],
+      ['Brann', 'Gosto de você. Precisamos de alguém para abrir o caminho até o castelo. Sir Varek comanda a ocupação. Se ele cair, a cidade respira.'],
+      ['Mira', 'E Dorian?'],
+      ['Brann', 'Dorian não sai do castelo. Ele tem medo do povo. E medo é uma porta.'],
+      ['Brann', 'Leve isto. A resistência economizou durante meses.'],
+    ]);
+    ctx.give('potion2', 2);
+    ctx.give('elixir', 1);
+    ctx.quest('Derrote Sir Varek no centro de Brumalva.');
+  },
+
+  async night_guard(g, ctx) {
+    if (g.flags.nightGuardDown) {
+      await lines([['Narrador', 'Os guardas que sobraram evitam seu olhar.']]);
+      return;
+    }
+    await lines([
+      ['Guarda', 'Toque o sino, e a cidade queima. Volte para a sua casa, lenhador.'],
+      ['Kael', 'Minha casa está aqui. E você está nela.'],
+    ]);
+    await fight(g, ctx, ['guard', 'hound'], {
+      bg: 'night', canFlee: false,
+      intro: 'A patrulha de Dorian avança.',
+    });
+    set(g, 'nightGuardDown');
+    await lines([
+      ['Narrador', 'A última patrulha cai. Uma janela se acende ao longe — alguém viu.'],
+    ]);
+    ctx.quest('Derrote Sir Varek no centro de Brumalva.');
+  },
+
+  async night_varek(g, ctx) {
+    if (g.flags.varekDown) return;
+    await lines([
+      ['Sir Varek', 'O lenhador traidor. Dorian falou de você. Disse que era teimoso.'],
+      ['Kael', 'Dorian fala demais.'],
+      ['Sir Varek', 'Ele também disse que você ainda ama a garota. Isso te torna previsível.'],
+      ['Kael', 'E você é previsível por obedecer.'],
+      ['Sir Varek', 'Eu obedeço porque alguém precisa manter este reino de pé.'],
+    ]);
+    await fight(g, ctx, ['champion', 'guard'], {
+      boss: true, bg: 'night', canFlee: false,
+      intro: 'Sir Varek ergue a espada carmesim.',
+    });
+    set(g, 'varekDown');
+    set(g, 'manorOpen');
+    ctx.levelTo('kael', 9);
+    ctx.levelTo('garrick', 9);
+    ctx.levelTo('mira', 9);
+    await lines([
+      ['Narrador', 'Varek cai. Do bolso de seu manto, um decreto selado com a marca de Dorian.'],
+      ['Mira', '“A portadora da Brasa não deve ser ferida. Dorian.”'],
+      ['Kael', 'Portadora?'],
+      ['Garrick', 'A Brasa não escolhe o rei. Ela escolhe um recipiente. Lyra não é cúmplice. Ela é a prisão.'],
+      ['Kael', 'Onde ela está?'],
+      ['Garrick', 'Ainda nesta vila. Eu a vi no terraço da casa grande.'],
+    ]);
+    ctx.quest('Procure Lyra no centro da vila.');
+  },
+
+  async night_lyra(g, ctx) {
+    if (g.flags.lyraJoined) {
+      await lines([['Lyra', 'O castelo espera. Eu sinto a Brasa puxando. Vamos.']]);
+      return;
+    }
+    await lines([
+      ['Lyra', 'Kael.'],
+      ['Kael', 'Três anos.'],
+      ['Lyra', 'Eu sei.'],
+      ['Kael', 'Você estava lá. Você me viu ser levado.'],
+      ['Lyra', 'Dorian segurou a Brasa contra o peito do meu pai. Ele disse que, se eu abrisse a boca, o fogo consumiria ele primeiro. Eu escolhi. Todos os dias, eu escolhi.'],
+      ['Kael', 'Você poderia ter me contado.'],
+      ['Lyra', 'Como? Eu era a voz dele. O que eu dissesse, ele transformava em lei. A única coisa que eu podia proteger era a vida de vocês. A sua... e a do meu pai.'],
+      ['Kael', 'E agora?'],
+      ['Lyra', 'Agora ele quer que eu acenda a Brasa no castelo. Se eu fizer, o reino inteiro vira combustível. Se eu não fizer, ele mata todo mundo que amo. De novo.'],
+      ['Mira', 'Então não deixamos ele escolher.'],
+      ['Garrick', 'A Lâmina Aurora foi feita para apagar a Brasa. Se alguém pode chegar perto dela, é você, Lyra.'],
+      ['Lyra', 'Você confiaria em mim?'],
+    ]);
+    const choice = await ui.choice('O que Kael responde?', [
+      { label: 'Eu confio em você.', value: 'trust' },
+      { label: 'Prove que mudou.', value: 'prove' },
+    ]);
+    set(g, 'trustedLyra', choice === 'trust');
+    if (choice === 'trust') {
+      await lines([
+        ['Kael', 'Eu não confio no que aconteceu. Mas confio em quem você escolhe ser agora.'],
+        ['Lyra', 'Então eu vou escolher certo.'],
+      ]);
+    } else {
+      await lines([
+        ['Kael', 'Você tem uma chance. Uma. Não desperdice.'],
+        ['Lyra', 'Uma é mais do que eu mereço.'],
+      ]);
+    }
+    set(g, 'lyraJoined');
+    ctx.join('lyra', 9);
+    ctx.levelTo('kael', 9);
+    ctx.levelTo('garrick', 9);
+    ctx.levelTo('mira', 9);
+    ctx.healAll(1);
+    ctx.give('locket', 1);
+    await lines([
+      ['Narrador', 'Lyra tira o medalhão de prata do bolso e o coloca na mão de Kael.'],
+      ['Lyra', 'Eu guardei. Todos esses anos.'],
+      ['Kael', 'Então vamos terminar isso. Juntos.'],
+    ]);
+    ctx.quest('Vá ao Castelo de Valdoria. Enfrente Dorian.');
+  },
+
+  // ------------------------------------------------------------ CHAPTER VI
+  async castle_arrival(g, ctx) {
+    if (g.flags.castleArrived) return;
+    set(g, 'castleArrived');
+    ctx.chapter(5);
+    await ui.chapterCard(CHAPTERS[5]);
+    await lines([
+      ['Narrador', 'O Castelo de Valdoria arde sem fumaça. As tochas queimam verde, e o ar cheira a ferro e mel.'],
+      ['Lyra', 'Ele está no trono. Eu sinto a Brasa puxando.'],
+      ['Garrick', 'Então vamos dar a ela um motivo para soltar.'],
+      ['Mira', 'Pela primeira vez, eu gostaria de estar em uma taverna.'],
+    ]);
+    ctx.quest('Abra caminho até o trono.');
+  },
+
+  async castle_knights(g, ctx) {
+    if (g.flags.castleKnightsDown) return;
+    await lines([
+      ['Dorian', 'Você demorou, Kael. Até a morte tem paciência.'],
+      ['Narrador', 'Cavaleiros sombrios descem das galerias. Espectros sussurram entre as colunas.'],
+      ['Garrick', 'Eu seguro a esquerda.'],
+      ['Mira', 'Eu seguro a direita.'],
+      ['Lyra', 'E eu seguro a Brasa.'],
+    ]);
+    await fight(g, ctx, ['darkknight', 'darkknight', 'wraith'], {
+      bg: 'castle', canFlee: false,
+      intro: 'A guarda sombria de Dorian bloqueia o salão.',
+    });
+    set(g, 'castleKnightsDown');
+    ctx.levelTo('kael', 10);
+    ctx.levelTo('garrick', 10);
+    ctx.levelTo('mira', 10);
+    ctx.levelTo('lyra', 10);
+    ctx.healAll(1);
+    await lines([
+      ['Narrador', 'O último cavaleiro sombrio se desfaz. A porta do trono se abre sozinha.'],
+      ['Kael', 'Dorian.'],
+    ]);
+    ctx.quest('Enfrente Dorian no trono.');
+  },
+
+  async final_dorian(g, ctx) {
+    return finalBattle(g, ctx);
+  },
+
+  async final_battle(g, ctx) {
+    return finalBattle(g, ctx);
+  },
 };
+
+export async function runScript(name, game, ctx) {
+  const fn = SCRIPTS[name];
+  if (!fn) return false;
+  const result = await fn(game, ctx);
+  return result === 'title' ? 'title' : true;
+}
+
+export function hasScript(name) {
+  return !!SCRIPTS[name];
+}

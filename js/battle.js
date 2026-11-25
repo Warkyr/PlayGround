@@ -1,1097 +1,649 @@
-import { ENEMIES, ENEMY_SKILLS, SKILLS, ITEMS } from './data.js';
-import { drawBattleBackground, drawCharacter, drawEnemy, drawParticles, drawFloaters, drawPortrait, drawShadow } from './art.js';
+// battle.js — turn-based combat engine
+import { Input, wait, clamp, rand, chance, pick } from './util.js';
+import { audio } from './audio.js';
+import { ui } from './ui.js';
+import {
+  SKILLS, ITEMS, ENEMIES, STATUS_INFO, ELEMENTS,
+  xpToNext, levelUpMember,
+} from './data.js';
+import {
+  setupBattleUI, teardownBattleUI, logMsg, syncHUD, commandMenu,
+  skillMenu, itemMenu, targetMenu, drawBattleFrame, battleActorPos, elementColor,
+} from './battle-ui.js';
 
-const wait = (ms) => new Promise(res => setTimeout(res, ms));
-const rand = (a, b) => a + Math.random() * (b - a);
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+let activeBattle = null;
+export function getActiveBattle() { return activeBattle; }
 
-export class Battle {
-  constructor(game, encounter) {
-    this.game = game;
-    this.encounter = encounter;
-    this.background = encounter.background || 'castle';
-    this.title = encounter.title || 'Batalha';
-    this.heroes = game.party.map((m, i) => this.makeHero(m, i));
-    this.enemies = encounter.enemies.map((e, i) => this.makeEnemy(e, i));
-    this.round = 0;
-    this.order = [];
-    this.active = null;
-    this.finished = false;
-    this.result = null;
-    this.busy = false;
-    this.commandMode = 'root';
-    this.pending = null;
-    this.turnResolve = null;
-    this.fx = { shake: 0, flash: 0, flashColor: '#fff', particles: [], floaters: [] };
-    this.lastT = performance.now();
-    this.message = '';
-    this.barks = new Set();
-    this.rewards = null;
-    this.el = {
-      ui: document.getElementById('battle-ui'),
-      round: document.getElementById('battle-round'),
-      order: document.getElementById('turn-order'),
-      enemies: document.getElementById('battle-enemies'),
-      message: document.getElementById('battle-message'),
-      party: document.getElementById('battle-party'),
-      actor: document.getElementById('battle-actor'),
-      actorName: document.getElementById('battle-actor-name'),
-      actorPortrait: document.getElementById('battle-actor-portrait'),
-      actorHp: document.getElementById('actor-hp-bar'),
-      actorMp: document.getElementById('actor-mp-bar'),
-      actorHint: document.getElementById('battle-actor-hint'),
-      commands: document.getElementById('battle-commands'),
-      result: document.getElementById('battle-result')
-    };
-    this.onKey = this.onKey.bind(this);
-    this.onCommandClick = (event) => {
-      const btn = event.target.closest('.cmd-btn');
-      if (btn && !btn.disabled) this.handleCommand(btn);
-    };
+const ARENA_AMBIENT = {
+  snow: 'snow', castle: 'embers', night: 'embers', prison: 'embers', shrine: 'dust', temple: 'dust',
+};
+
+function makeEnemy(id, index, scale = 1) {
+  const d = ENEMIES[id] || ENEMIES.wolf;
+  const hp = Math.max(1, Math.round(d.hp * scale));
+  return {
+    id, name: d.name, isEnemy: true, level: d.boss ? 12 : 3,
+    hp, maxHp: hp, mp: d.mp || 0, maxMp: d.mp || 0,
+    atk: Math.round(d.atk * scale), def: Math.round(d.def * scale),
+    mag: Math.round(d.mag * scale), res: Math.round(d.res * scale),
+    spd: d.spd, lck: d.lck,
+    xp: d.xp, gold: d.gold, weak: d.weak || [], resist: d.resist || [],
+    skills: [...(d.skills || [])], boss: !!d.boss, accent: d.accent,
+    scaleBase: d.scale || 5, status: {}, buffs: [], defending: false,
+    anim: null, flashT: 0, deadT: 0, bobPhase: index * 1.7,
+    x: 0, y: 0, scale: d.scale || 5,
+  };
+}
+
+function statMult(actor, stat) {
+  let m = 1;
+  for (const b of actor.buffs || []) {
+    if (b.stat === stat && b.turns > 0) m *= b.mult;
   }
+  return m;
+}
 
-  makeHero(member, index) {
-    return {
-      side: 'hero', index, id: member.id, name: member.name, art: member.id,
-      level: member.level,
-      hp: member.hp, maxHp: member.maxHp,
-      mp: member.mp, maxMp: member.maxMp,
-      stats: { ...member.stats },
-      skills: [...member.skills],
-      alive: member.hp > 0,
-      defending: false, taunt: 0, shield: 0,
-      buffs: {}, statuses: {},
-      lungeUntil: 0, flashUntil: 0, phase2: false
-    };
+function healActor(actor, amount) {
+  const before = actor.hp;
+  actor.hp = Math.min(actor.maxHp, actor.hp + Math.max(0, Math.round(amount)));
+  return actor.hp - before;
+}
+
+function effectColor(fx) {
+  switch (fx) {
+    case 'fire': case 'fireAll': return '#ff9a4a';
+    case 'ice': case 'iceAll': return '#8ad8ff';
+    case 'holy': case 'holyAll': return '#ffe6a0';
+    case 'dark': return '#b795e8';
+    case 'heal': return '#7ddba0';
+    case 'buff': case 'shield': return '#ffd27a';
+    case 'debuff': return '#c08a8a';
+    default: return '#fff3cf';
   }
+}
 
-  makeEnemy(spec, index) {
-    const def = ENEMIES[spec.id];
-    const hpScale = this.encounter.hpScale || 1;
-    const hp = Math.round(def.hp * hpScale);
-    return {
-      side: 'enemy', index, id: def.id, name: spec.name || def.name, art: def.art,
-      hp, maxHp: hp, mp: def.mp, maxMp: def.mp,
-      stats: { atk: def.atk, def: def.def, mag: def.mag, spd: def.spd, luck: 2 },
-      skills: [...def.skills],
-      xp: def.xp, gold: def.gold, boss: !!def.boss,
-      alive: true, defending: false, taunt: 0, shield: 0,
-      buffs: {}, statuses: {},
-      lungeUntil: 0, flashUntil: 0, phase2: false
-    };
-  }
-
-  async run() {
-    this.el.ui.classList.remove('hidden');
-    this.el.result.classList.add('hidden');
-    this.game.audio.playMusic(this.encounter.boss ? 'boss' : 'battle');
-    this.renderAll();
-    this.setMessage(this.encounter.intro || 'A batalha começa!');
-    await wait(1300);
-    this.setMessage('');
-
-    while (!this.finished) {
-      this.round++;
-      this.el.round.textContent = `RODADA ${this.round}`;
-      this.buildOrder();
-      this.renderAll();
-      for (const unit of this.order) {
-        if (this.finished) break;
-        if (!unit.alive) continue;
-        this.active = unit;
-        this.renderAll();
-        this.commandMode = 'root';
-        this.pending = null;
-        this.tickStart(unit);
-        if (this.checkEnd()) break;
-        if (!unit.alive) continue;
-
-        if (unit.side === 'hero') {
-          await this.heroTurn(unit);
-        } else {
-          await this.enemyTurn(unit);
-        }
-        if (this.checkEnd()) break;
-        this.tickEnd(unit);
-        this.renderAll();
-        await wait(180);
-      }
-    }
-
-    this.active = null;
-    this.renderAll();
-    if (this.result === 'win') {
-      await this.victorySequence();
-    }
-    this.el.ui.classList.add('hidden');
-    this.el.result.classList.add('hidden');
-    this.el.commands.innerHTML = '';
-    window.removeEventListener('keydown', this.onKey);
-    this.el.commands.removeEventListener('click', this.onCommandClick);
-    this.game.audio.playMusic(this.game.musicForScene());
-    return this.result;
-  }
-
-  buildOrder() {
-    this.order = [...this.heroes, ...this.enemies]
-      .filter(u => u.alive)
-      .sort((a, b) => this.speed(b) + Math.random() * 2 - (this.speed(a) + Math.random() * 2));
-    this.renderOrder();
-  }
-
-  speed(unit) {
-    let s = unit.stats.spd;
-    if (unit.statuses.slow) s *= .65;
-    if (unit.buffs.spd) s *= unit.buffs.spd.mult;
-    return s;
-  }
-
-  eff(unit, stat) {
-    let v = unit.stats[stat] || 0;
-    if (unit.buffs[stat]) v *= unit.buffs[stat].mult;
-    return v;
-  }
-
-  tickStart(unit) {
-    unit.defending = false;
-    for (const key of Object.keys(unit.buffs)) {
-      unit.buffs[key].turns--;
-      if (unit.buffs[key].turns <= 0) delete unit.buffs[key];
-    }
-    for (const key of Object.keys(unit.statuses)) {
-      unit.statuses[key].turns--;
-      if (unit.statuses[key].turns <= 0) delete unit.statuses[key];
-    }
-    if (unit.taunt > 0) unit.taunt--;
-    if (unit.statuses.poison) {
-      const dmg = Math.max(4, Math.round(unit.maxHp * .055));
-      this.damageHp(unit, dmg);
-      this.floatText(`-${dmg}`, unit, '#b9d47f', 18);
-      this.addParticlesAt(unit, '#8db36b', 8);
-      this.setMessage(`${unit.name} sofre com o veneno.`);
-    }
-    if (unit.statuses.burn) {
-      const dmg = Math.max(5, Math.round(unit.maxHp * .07));
-      this.damageHp(unit, dmg);
-      this.floatText(`-${dmg}`, unit, '#ef9a65', 18);
-      this.addParticlesAt(unit, '#e2683d', 10);
-      this.setMessage(`${unit.name} queima nas cinzas.`);
-    }
-  }
-
-  tickEnd(unit) {
-    // Buffs decay at the start of the next turn. Nothing to do here.
-  }
-
-  async heroTurn(unit) {
-    this.setMessage(`${unit.name}, é a sua vez.`);
-    this.renderActor(unit);
-    this.commandMode = 'root';
-    this.renderCommands(unit);
-    return new Promise(resolve => {
-      this.turnResolve = resolve;
-    });
-  }
-
-  async enemyTurn(unit) {
-    this.setMessage(`${unit.name} se prepara...`);
-    this.renderActor(unit);
-    await wait(520);
-    const skillId = this.chooseEnemySkill(unit);
-    const skill = ENEMY_SKILLS[skillId];
-    if (!skill) {
-      await this.basicEnemyAttack(unit);
+function fxFor(state, fx, targets, source) {
+  if (!state.fx) return;
+  const color = effectColor(fx);
+  const all = fx && fx.endsWith('All');
+  const list = all ? targets : targets.slice(0, 3);
+  for (const t of list) {
+    if (!t) continue;
+    const p = battleActorPos(t);
+    if (fx === 'slash') {
+      state.fx.slash(p.x, p.y, rand(-0.7, 0.7), { len: 110, color });
+    } else if (fx === 'quake') {
+      state.fx.ring(p.x, p.y + 20, { r0: 10, r1: 90, color: '#c9a44c', width: 4 });
+      state.fx.burst(p.x, p.y + 20, { count: 16, colors: ['#9a8258', '#6e5c42'], speedMin: 30, speedMax: 130, gravity: 140 });
+    } else if (fx === 'heal') {
+      state.fx.burst(p.x, p.y, { count: 14, colors: ['#7ddba0', '#d8ffe0'], speedMin: 15, speedMax: 55, gravity: -50, glow: true });
+      state.fx.ring(p.x, p.y, { r0: 8, r1: 55, color });
+    } else if (fx === 'shield' || fx === 'buff') {
+      state.fx.ring(p.x, p.y, { r0: 8, r1: 52, color });
+      state.fx.burst(p.x, p.y, { count: 12, colors: [color, '#ffffff'], speedMin: 10, speedMax: 60, gravity: -30 });
+    } else if (fx === 'debuff') {
+      state.fx.burst(p.x, p.y, { count: 14, colors: ['#c08a8a', '#8a6a8a'], speedMin: 10, speedMax: 60, gravity: 40 });
     } else {
-      const targets = this.resolveEnemyTargets(unit, skill);
-      await this.useSkill(unit, skill, targets);
-    }
-    this.setMessage('');
-    if (!this.finished) {
-      await wait(260);
+      state.fx.burst(p.x, p.y, { count: all ? 12 : 20, colors: [color, '#ffffff'], speedMin: 30, speedMax: 160, gravity: 40, glow: true });
+      state.fx.ring(p.x, p.y, { r0: 6, r1: all ? 60 : 80, color });
     }
   }
+  if (fx === 'quake') state.fx.shake(7, 0.28);
+  if (fx === 'holyAll') state.fx.flashScreen('#ffe6a0', 0.25, 0.3);
+  if (source) {
+    const p = battleActorPos(source);
+    if (fx === 'slash') state.fx.slash(p.x + 20, p.y, -0.4, { len: 70, color: '#fff6d8' });
+  }
+}
 
-  chooseEnemySkill(unit) {
-    const usable = unit.skills.filter(id => {
-      const sk = ENEMY_SKILLS[id];
-      if (!sk) return false;
-      if (sk.kind === 'buff') {
-        const key = Object.keys(sk.buff || {})[0];
-        if (unit.buffs[key] && unit.buffs[key].turns > 1) return false;
+function computeDamage(state, attacker, target, sk) {
+  const magic = sk.kind === 'mag';
+  const atkStat = (magic ? attacker.mag : attacker.atk) * statMult(attacker, 'atk');
+  const defStat = (magic ? target.res : target.def) * statMult(target, 'def');
+  let base = atkStat * (sk.power || 1) - defStat * 0.62;
+  base = Math.max(2, base) * rand(0.9, 1.1);
+  let mult = 1;
+  const element = sk.element || 'none';
+  if ((target.weak || []).includes(element)) mult *= 1.55;
+  if ((target.resist || []).includes(element)) mult *= 0.55;
+  if (target.defending) mult *= 0.5;
+  const crit = chance(0.04 + (attacker.lck || 0) * 0.006);
+  if (crit) mult *= 1.65;
+  return { amount: Math.max(1, Math.round(base * mult)), crit, element };
+}
+
+function damageTarget(state, source, target, amount, opts = {}) {
+  if (!target || target.hp <= 0) return 0;
+  target.hp = Math.max(0, target.hp - amount);
+  target.flashT = 0.24;
+  const p = battleActorPos(target);
+  state.fx.number(p.x, p.y, String(amount), {
+    color: opts.color || elementColor(opts.element || 'none'),
+    crit: !!opts.crit,
+    size: opts.crit ? 34 : 26,
+  });
+  if (opts.crit) {
+    state.fx.ring(p.x, p.y, { r0: 8, r1: 70, color: '#ffe6a0', width: 4 });
+    state.fx.shake(6, 0.22);
+  }
+  if (target.hp <= 0) {
+    logMsg(state, `${target.name} cai.`);
+    target.status = {};
+    target.buffs = [];
+    target.defending = false;
+    audio.sfx('defeat');
+  }
+  return amount;
+}
+
+function healTarget(state, target, amount) {
+  if (!target) return 0;
+  const healed = healActor(target, amount);
+  if (healed > 0) {
+    const p = battleActorPos(target);
+    state.fx.number(p.x, p.y, `+${healed}`, { color: '#8affb0', size: 24 });
+  }
+  return healed;
+}
+
+function opponentsOf(state, actor) {
+  return actor.isEnemy ? state.allies : state.enemies;
+}
+function alliesOf(state, actor) {
+  return actor.isEnemy ? state.enemies : state.allies;
+}
+
+function resolveTargets(state, actor, sk, chosen) {
+  const opp = opponentsOf(state, actor);
+  const allies = alliesOf(state, actor);
+  switch (sk.target) {
+    case 'enemy': {
+      if (chosen) return [chosen];
+      const alive = opp.filter((a) => a.hp > 0);
+      return alive.length ? [pick(alive)] : [];
+    }
+    case 'allEnemies': return opp.filter((a) => a.hp > 0);
+    case 'ally': {
+      if (chosen) return [chosen];
+      const alive = allies.filter((a) => a.hp > 0);
+      alive.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+      return alive.length ? [alive[0]] : [];
+    }
+    case 'allAllies': return allies.filter((a) => a.hp > 0);
+    case 'self': return [actor];
+    case 'deadAlly': {
+      if (chosen) return [chosen];
+      const dead = allies.filter((a) => a.hp <= 0);
+      return dead.length ? [dead[0]] : [];
+    }
+    default: return [];
+  }
+}
+
+function applyBuff(actor, buff) {
+  if (!buff) return;
+  actor.buffs = (actor.buffs || []).filter((b) => !(b.stat === buff.stat && b.mult === buff.mult));
+  actor.buffs.push({ stat: buff.stat, mult: buff.mult, turns: buff.turns });
+}
+
+async function performSkill(state, actor, sid, chosen = null, auto = false) {
+  const sk = SKILLS[sid];
+  if (!sk) return;
+  if (sk.cost && actor.mp < sk.cost) {
+    if (!auto) ui.toast('MP insuficiente.', 'red', '✦');
+    return;
+  }
+  if (sk.cost) actor.mp = Math.max(0, actor.mp - sk.cost);
+  state.phase = 'action';
+  state.current = actor;
+  actor.anim = { t: 0, dur: 0.34, dx: actor.isEnemy ? -30 : 34 };
+  audio.sfx(sk.sfx || 'hit');
+  logMsg(state, `${actor.name} usa <b>${sk.name}</b>!`);
+  syncHUD(state);
+  await wait(300);
+
+  const targets = resolveTargets(state, actor, sk, chosen);
+  fxFor(state, sk.fx, targets.length ? targets : [actor], actor);
+
+  if (sk.kind === 'phys' || sk.kind === 'mag') {
+    for (const target of targets) {
+      const { amount, crit, element } = computeDamage(state, actor, target, sk);
+      damageTarget(state, actor, target, amount, { crit, element });
+      if (sk.drain) healTarget(state, actor, amount * sk.drain);
+      if (sk.healSelf) healTarget(state, actor, amount * sk.healSelf);
+      if (sk.status && target.hp > 0 && chance(sk.status.chance || 0)) {
+        target.status[sk.status.id] = { turns: sk.status.turns || 1 };
+        const info = STATUS_INFO[sk.status.id];
+        logMsg(state, `${target.name} sofre ${info?.name || sk.status.id}.`);
       }
-      return true;
-    });
-    if (!usable.length) return 'attack';
-    if (unit.boss && unit.phase2 && unit.id === 'lyra' && !this.barks.has('lyraRequiem') && Math.random() < .7) {
-      this.barks.add('lyraRequiem');
-      return 'requiem';
     }
-    const weights = usable.map(id => {
-      const sk = ENEMY_SKILLS[id];
-      if (sk.kind === 'buff') return 1;
-      if (sk.target === 'allEnemies') return 2;
-      if (sk.kind === 'drain') return 2;
-      return 4;
-    });
-    let total = weights.reduce((a, b) => a + b, 0);
-    let roll = Math.random() * total;
-    for (let i = 0; i < usable.length; i++) {
-      roll -= weights[i];
-      if (roll <= 0) return usable[i];
+    if (sk.kind === 'mag') await wait(140);
+  } else if (sk.kind === 'heal' || sk.kind === 'healAll') {
+    const power = (sk.heal || 0) + (actor.mag || 0) * (sk.healMag || 0);
+    for (const target of targets) {
+      if (target.hp <= 0) continue;
+      healTarget(state, target, power);
+      if (sk.cleanse) target.status = {};
     }
-    return usable[0];
+    audio.sfx('heal');
+  } else if (sk.kind === 'revive') {
+    for (const target of targets) {
+      if (target.hp > 0) continue;
+      target.hp = Math.max(1, Math.round(target.maxHp * (sk.revive || 0.5)));
+      target.status = {};
+      target.buffs = [];
+      const p = battleActorPos(target);
+      state.fx.ring(p.x, p.y, { r0: 10, r1: 80, color: '#ffe6a0', width: 4 });
+      state.fx.number(p.x, p.y, 'RENASCER', { color: '#ffe6a0', size: 22 });
+      logMsg(state, `${target.name} retorna à luz.`);
+    }
+    audio.sfx('holy');
+  } else if (sk.kind === 'buff' || sk.kind === 'debuff') {
+    for (const target of targets) {
+      applyBuff(target, sk.buff);
+      if (sk.regen) target.buffs.push({ stat: 'regen', mult: sk.regen, turns: sk.buff?.turns || 3 });
+    }
+    audio.sfx(sk.sfx || 'buff');
   }
 
-  resolveEnemyTargets(unit, skill) {
-    const heroes = this.heroes.filter(h => h.alive);
-    if (!heroes.length) return [];
-    if (skill.target === 'self') return [unit];
-    if (skill.target === 'allEnemies') return heroes;
-    const taunting = heroes.filter(h => h.taunt > 0);
-    if (taunting.length) return [pick(taunting)];
-    if (Math.random() < .28) {
-      return [heroes.slice().sort((a, b) => a.hp - b.hp)[0]];
+  syncHUD(state);
+  await wait(340);
+}
+
+async function basicAttack(state, actor, target) {
+  const sk = { name: 'Ataque', kind: 'phys', power: 1, element: 'none', fx: 'slash', sfx: 'hit' };
+  state.phase = 'action';
+  state.current = actor;
+  actor.anim = { t: 0, dur: 0.3, dx: actor.isEnemy ? -30 : 34 };
+  audio.sfx('hit');
+  logMsg(state, `${actor.name} ataca!`);
+  syncHUD(state);
+  await wait(250);
+  fxFor(state, 'slash', [target], actor);
+  const { amount, crit, element } = computeDamage(state, actor, target, sk);
+  damageTarget(state, actor, target, amount, { crit, element });
+  syncHUD(state);
+  await wait(320);
+}
+
+async function pickPlayerTarget(state, actor, sk) {
+  if (sk.target === 'enemy') {
+    return await targetMenu(state, { side: 'enemy' });
+  }
+  if (sk.target === 'ally') {
+    return await targetMenu(state, { side: 'ally' });
+  }
+  if (sk.target === 'deadAlly') {
+    const dead = state.allies.filter((m) => m.hp <= 0);
+    if (!dead.length) { ui.toast('Nenhum aliado caído.', 'red', '✚'); return undefined; }
+    const t = await targetMenu(state, { side: 'ally', allowDead: true });
+    if (!t) return null;
+    if (t.hp > 0) { ui.toast('Escolha um aliado caído.', 'red', '✚'); return undefined; }
+    return t;
+  }
+  return null;
+}
+
+async function useBattleItem(state, actor, id) {
+  const it = ITEMS[id];
+  const game = state.game;
+  if (!it || !game.inventory[id]) return false;
+  let targets = [];
+  if (it.target === 'ally') {
+    const t = await targetMenu(state, { side: 'ally', allowDead: false });
+    if (!t) return false;
+    targets = [t];
+  } else if (it.target === 'allEnemies') {
+    targets = state.enemies.filter((e) => e.hp > 0);
+  } else {
+    targets = [actor];
+  }
+  logMsg(state, `${actor.name} usa <b>${it.name}</b>.`);
+  if (it.heal) {
+    for (const t of targets) {
+      if (t.hp >= t.maxHp) { ui.toast(`${t.name} já está com HP cheio.`, '', '♥'); return false; }
+      healTarget(state, t, it.heal);
     }
-    return [pick(heroes)];
   }
-
-  async basicEnemyAttack(unit) {
-    const targets = this.resolveEnemyTargets(unit, { target: 'enemy' });
-    const skill = { name: 'Ataque', kind: 'phys', power: 1, target: 'enemy' };
-    await this.useSkill(unit, skill, targets);
+  if (it.mp) {
+    for (const t of targets) {
+      if (t.mp >= t.maxMp) { ui.toast(`${t.name} já está com MP cheio.`, '', '✦'); return false; }
+      t.mp = Math.min(t.maxMp, t.mp + it.mp);
+      const p = battleActorPos(t);
+      state.fx.number(p.x, p.y, `+${it.mp} MP`, { color: '#8ac8ff', size: 20 });
+    }
   }
+  if (it.cure) for (const t of targets) t.status = {};
+  if (it.full) {
+    for (const t of targets) {
+      t.hp = t.maxHp; t.mp = t.maxMp; t.status = {};
+      const p = battleActorPos(t);
+      state.fx.ring(p.x, p.y, { r0: 10, r1: 70, color: '#ffe6a0', width: 3 });
+    }
+  }
+  if (it.damage) {
+    for (const t of targets) {
+      damageTarget(state, actor, t, it.damage, { color: '#ff9a4a' });
+      state.fx.burst(battleActorPos(t).x, battleActorPos(t).y, { count: 18, colors: ['#ff9a4a', '#ffd27a'], speedMin: 40, speedMax: 170 });
+    }
+    state.fx.shake(6, 0.25);
+  }
+  if (it.flee) {
+    state.fleeResult = true;
+    logMsg(state, 'A fumaça cobre a fuga.');
+    audio.sfx('flee');
+  }
+  game.inventory[id]--;
+  if (game.inventory[id] <= 0) delete game.inventory[id];
+  audio.sfx(it.heal ? 'heal' : it.damage ? 'fire' : 'buff');
+  syncHUD(state);
+  await wait(320);
+  return true;
+}
 
-  onKey(e) {
-    if (!this.active && !this.el.result.classList.contains('hidden')) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        const btn = this.el.result.querySelector('button');
-        if (btn) btn.click();
-      }
+async function allyTurn(state, actor) {
+  while (true) {
+    state.phase = 'command';
+    state.current = actor;
+    syncHUD(state);
+    const cmd = await commandMenu(state, actor);
+    if (cmd === 'attack') {
+      state.phase = 'target';
+      const target = await targetMenu(state, { side: 'enemy' });
+      if (!target) continue;
+      await basicAttack(state, actor, target);
       return;
     }
-    if (!this.active || this.busy) return;
-    if (e.key === 'Escape' || e.key === 'Backspace') {
-      e.preventDefault();
-      if (this.commandMode !== 'root') {
-        this.commandMode = 'root';
-        this.pending = null;
-        this.renderCommands(this.active);
-        this.game.audio.sfx('cancel');
-      }
+    if (cmd === 'skill') {
+      const sid = await skillMenu(state, actor);
+      if (!sid) continue;
+      const sk = SKILLS[sid];
+      if (actor.mp < sk.cost) { ui.toast('MP insuficiente.', 'red', '✦'); continue; }
+      state.phase = 'target';
+      const target = await pickPlayerTarget(state, actor, sk);
+      if (target === null) continue;
+      await performSkill(state, actor, sid, target);
       return;
     }
-    if (/^[1-9]$/.test(e.key)) {
-      const btn = this.el.commands.querySelector(`[data-key="${e.key}"]`);
-      if (btn && !btn.disabled) {
-        e.preventDefault();
-        btn.click();
-      }
+    if (cmd === 'item') {
+      const id = await itemMenu(state, state.game);
+      if (!id) continue;
+      const used = await useBattleItem(state, actor, id);
+      if (used) return;
+      continue;
     }
-  }
-
-  attachKeys() {
-    window.addEventListener('keydown', this.onKey);
-  }
-
-  setMessage(text) {
-    this.message = text;
-    if (text) {
-      this.el.message.querySelector('span').textContent = text;
-      this.el.message.classList.add('visible');
-    } else {
-      this.el.message.classList.remove('visible');
-    }
-  }
-
-  renderAll() {
-    this.renderEnemyCards();
-    this.renderParty();
-    this.renderOrder();
-    this.renderActor(this.active);
-    if (this.active && this.active.side === 'hero' && !this.busy) {
-      this.renderCommands(this.active);
-    }
-  }
-
-  renderEnemyCards() {
-    this.el.enemies.innerHTML = this.enemies.map(e => {
-      const pct = Math.max(0, Math.round(e.hp / e.maxHp * 100));
-      const status = Object.keys(e.statuses).join(' · ');
-      return `<div class="enemy-card ${e.alive ? '' : 'dead'}">
-        <span class="e-name">${e.name}</span>
-        <span class="e-hp"><i style="width:${pct}%"></i></span>
-        ${status ? `<span class="e-status">${status}</span>` : ''}
-      </div>`;
-    }).join('');
-  }
-
-  renderParty() {
-    this.el.party.innerHTML = this.heroes.map(h => {
-      const hp = Math.max(0, Math.round(h.hp / h.maxHp * 100));
-      const mp = Math.max(0, Math.round(h.mp / h.maxMp * 100));
-      return `<div class="battle-party-card ${h === this.active ? 'active' : ''} ${h.alive ? '' : 'down'}">
-        <div class="bp-avatar"><canvas width="40" height="40" data-avatar="${h.id}"></canvas></div>
-        <div>
-          <div class="bp-name">${h.name} <span style="opacity:.55">Nv.${h.level}</span></div>
-          <div class="bp-hp"><i style="width:${hp}%"></i></div>
-          <div class="bp-mp"><i style="width:${mp}%"></i></div>
-        </div>
-      </div>`;
-    }).join('');
-    for (const cv of this.el.party.querySelectorAll('canvas[data-avatar]')) {
-      drawPortrait(cv, cv.dataset.avatar);
-    }
-  }
-
-  renderOrder() {
-    const living = [...this.heroes, ...this.enemies].filter(u => u.alive);
-    const order = this.order.filter(u => u.alive);
-    const current = this.active;
-    this.el.order.innerHTML = order.map((u, i) => {
-      const isCurrent = u === current;
-      const label = u.side === 'hero' ? u.name : u.name.split(' ')[0];
-      if (u.side === 'hero') {
-        return `<div class="turn-chip ${isCurrent ? 'current' : ''}" title="${label}"><canvas width="28" height="28" data-chip="${u.id}"></canvas></div>`;
-      }
-      return `<div class="turn-chip enemy ${isCurrent ? 'current' : ''}" title="${label}">${label.charAt(0)}</div>`;
-    }).join('');
-    for (const cv of this.el.order.querySelectorAll('canvas[data-chip]')) {
-      drawPortrait(cv, cv.dataset.chip);
-    }
-  }
-
-  renderActor(unit) {
-    if (!unit) {
-      this.el.actorName.textContent = '—';
-      this.el.actorHint.textContent = 'A batalha continua...';
-      this.el.actorHp.style.width = '0%';
-      this.el.actorMp.style.width = '0%';
-      return;
-    }
-    this.el.actorName.textContent = `${unit.name}${unit.side === 'enemy' ? ' · INIMIGO' : ''}`;
-    this.el.actorHint.textContent = unit.side === 'hero' ? 'Escolha uma ação' : 'Turno do inimigo';
-    this.el.actorHp.style.width = `${Math.max(0, unit.hp / unit.maxHp * 100)}%`;
-    this.el.actorMp.style.width = `${Math.max(0, unit.mp / Math.max(1, unit.maxMp) * 100)}%`;
-    drawPortrait(this.el.actorPortrait, unit.side === 'hero' ? unit.id : this.enemyPortraitId(unit));
-  }
-
-  enemyPortraitId(unit) {
-    return unit.id === 'inquisitor' ? 'voss' : unit.id === 'warden' ? 'guard' : unit.id;
-  }
-
-  renderCommands(unit) {
-    if (!unit || unit.side !== 'hero') {
-      this.el.commands.innerHTML = '';
-      return;
-    }
-    this.el.commands.classList.remove('targeting');
-    if (this.commandMode === 'root') {
-      const canFlee = this.encounter.canFlee !== false;
-      this.el.commands.innerHTML = `
-        <button class="cmd-btn" data-key="1" data-act="attack"><span>Atacar</span><small>Golpe básico</small></button>
-        <button class="cmd-btn" data-key="2" data-act="skills"><span>Habilidades</span><small>${unit.skills.length} técnicas</small></button>
-        <button class="cmd-btn" data-key="3" data-act="items"><span>Itens</span><small>${this.itemCount()} disponíveis</small></button>
-        <button class="cmd-btn" data-key="4" data-act="defend"><span>Defender</span><small>Reduz dano · +6 PM</small></button>
-        ${canFlee ? '<button class="cmd-btn wide danger" data-key="5" data-act="flee"><span>Fugir</span><small>Tentar escapar da batalha</small></button>' : ''}
-      `;
-    } else if (this.commandMode === 'skills') {
-      const rows = unit.skills.map((id, i) => {
-        const sk = SKILLS[id];
-        const disabled = unit.mp < sk.cost;
-        return `<button class="cmd-btn ${disabled ? 'disabled' : ''}" data-key="${i + 1}" data-act="skill" data-id="${id}" ${disabled ? 'disabled' : ''}>
-          <span>${sk.name}</span><small>${sk.cost ? `<span class="cost">${sk.cost} PM</span> · ` : ''}${sk.desc}</small>
-        </button>`;
-      });
-      rows.push(`<button class="cmd-btn" data-key="9" data-act="back"><span>Voltar</span><small>Retornar às ações</small></button>`);
-      this.el.commands.innerHTML = rows.join('');
-    } else if (this.commandMode === 'items') {
-      const entries = Object.entries(this.game.inventory).filter(([id, n]) => n > 0 && ITEMS[id] && ITEMS[id].kind !== 'material');
-      if (!entries.length) {
-        this.el.commands.innerHTML = `<button class="cmd-btn wide" data-key="1" data-act="back"><span>Mochila vazia</span><small>Voltar</small></button>`;
-      } else {
-        const rows = entries.map(([id, n], i) => {
-          const it = ITEMS[id];
-          return `<button class="cmd-btn" data-key="${i + 1}" data-act="item" data-id="${id}">
-            <span>${it.name} <span style="color:#9c927f">×${n}</span></span><small>${it.desc}</small>
-          </button>`;
-        });
-        rows.push(`<button class="cmd-btn" data-key="9" data-act="back"><span>Voltar</span><small>Retornar às ações</small></button>`);
-        this.el.commands.innerHTML = rows.join('');
-      }
-    } else if (this.commandMode === 'target') {
-      const action = this.pending;
-      const targets = this.targetCandidates(action);
-      if (!targets.length) {
-        this.commandMode = 'root';
-        this.pending = null;
-        this.renderCommands(unit);
-        return;
-      }
-      this.el.commands.classList.add('targeting');
-      const rows = targets.map((t, i) => {
-        const pct = Math.max(0, Math.round(t.hp / t.maxHp * 100));
-        return `<button class="cmd-btn" data-key="${i + 1}" data-act="target" data-side="${t.side}" data-index="${t.index}">
-          <span>${t.name}</span><small>${t.side === 'enemy' ? `Inimigo · ${pct}% PV` : `${t.alive ? `${pct}% PV` : 'Caído'} · ${t.mp}/${t.maxMp} PM`}</small>
-        </button>`;
-      });
-      rows.push(`<button class="cmd-btn" data-key="9" data-act="back"><span>Voltar</span><small>Cancelar alvo</small></button>`);
-      this.el.commands.innerHTML = rows.join('');
-    }
-  }
-
-  itemCount() {
-    return Object.entries(this.game.inventory)
-      .filter(([id, n]) => n > 0 && ITEMS[id] && ITEMS[id].kind !== 'material')
-      .reduce((a, [, n]) => a + n, 0);
-  }
-
-  targetCandidates(action) {
-    if (!action) return [];
-    if (action.type === 'attack') return this.enemies.filter(e => e.alive);
-    if (action.type === 'skill') {
-      const sk = SKILLS[action.id];
-      if (!sk) return [];
-      if (sk.target === 'enemy') return this.enemies.filter(e => e.alive);
-      if (sk.target === 'ally') return this.heroes.filter(h => h.alive);
-      if (sk.target === 'downedAlly') return this.heroes.filter(h => !h.alive);
-      if (sk.target === 'allEnemies') return this.enemies.filter(e => e.alive);
-      if (sk.target === 'allAllies') return this.heroes.filter(h => h.alive);
-      return [];
-    }
-    if (action.type === 'item') {
-      const it = ITEMS[action.id];
-      if (!it) return [];
-      if (it.kind === 'damageAll') return this.enemies.filter(e => e.alive);
-      return this.heroes.filter(h => h.alive || it.kind === 'full');
-    }
-    return [];
-  }
-
-  handleCommand(btn) {
-    if (!this.active || this.busy) return;
-    const act = btn.dataset.act;
-    const unit = this.active;
-    if (act === 'back') {
-      this.commandMode = 'root';
-      this.pending = null;
-      this.renderCommands(unit);
-      this.game.audio.sfx('cancel');
-      return;
-    }
-    if (act === 'attack') {
-      this.pending = { type: 'attack' };
-      this.commandMode = 'target';
-      this.renderCommands(unit);
-      this.game.audio.sfx('click');
-      return;
-    }
-    if (act === 'skills') {
-      this.commandMode = 'skills';
-      this.renderCommands(unit);
-      this.game.audio.sfx('click');
-      return;
-    }
-    if (act === 'items') {
-      this.commandMode = 'items';
-      this.renderCommands(unit);
-      this.game.audio.sfx('click');
-      return;
-    }
-    if (act === 'defend') {
-      this.executeHeroAction(unit, { type: 'defend' }, []);
-      return;
-    }
-    if (act === 'flee') {
-      this.executeHeroAction(unit, { type: 'flee' }, []);
-      return;
-    }
-    if (act === 'skill') {
-      const sk = SKILLS[btn.dataset.id];
-      if (!sk || unit.mp < sk.cost) return;
-      this.pending = { type: 'skill', id: btn.dataset.id };
-      if (sk.target === 'self') {
-        this.executeHeroAction(unit, this.pending, [unit]);
-      } else if (sk.target === 'allEnemies' || sk.target === 'allAllies') {
-        this.executeHeroAction(unit, this.pending, this.targetCandidates(this.pending));
-      } else {
-        this.commandMode = 'target';
-        this.renderCommands(unit);
-        this.game.audio.sfx('click');
-      }
-      return;
-    }
-    if (act === 'item') {
-      const it = ITEMS[btn.dataset.id];
-      if (!it || !this.game.inventory[btn.dataset.id]) return;
-      this.pending = { type: 'item', id: btn.dataset.id };
-      if (it.kind === 'damageAll') {
-        this.executeHeroAction(unit, this.pending, this.enemies.filter(e => e.alive));
-      } else {
-        this.commandMode = 'target';
-        this.renderCommands(unit);
-        this.game.audio.sfx('click');
-      }
-      return;
-    }
-    if (act === 'target') {
-      const side = btn.dataset.side;
-      const index = Number(btn.dataset.index);
-      const list = side === 'hero' ? this.heroes : this.enemies;
-      const target = list[index];
-      if (target) this.executeHeroAction(unit, this.pending, [target]);
-    }
-  }
-
-  async executeHeroAction(unit, action, targets) {
-    if (this.busy) return;
-    this.busy = true;
-    this.commandMode = 'root';
-    this.pending = null;
-    this.el.commands.innerHTML = '';
-    try {
-      if (action.type === 'defend') {
-        unit.defending = true;
-        unit.mp = Math.min(unit.maxMp, unit.mp + 6);
-        this.setMessage(`${unit.name} ergue a guarda e recupera 6 PM.`);
-        this.addParticlesAt(unit, '#8fb6d9', 10);
-        this.renderParty();
-        this.renderActor(unit);
-        await wait(720);
-      } else if (action.type === 'flee') {
-        const chance = Math.min(.85, .48 + this.speed(unit) * .012);
-        if (Math.random() < chance) {
-          this.setMessage('Vocês escapam para as sombras...');
-          this.game.audio.sfx('cancel');
-          await wait(900);
-          this.finished = true;
-          this.result = 'flee';
-        } else {
-          this.setMessage('A fuga falha. Não há para onde correr.');
-          await wait(800);
-        }
-      } else if (action.type === 'attack') {
-        const sk = { name: 'Ataque', kind: 'phys', power: 1, target: 'enemy', fx: 'slash' };
-        await this.useSkill(unit, sk, targets);
-      } else if (action.type === 'skill') {
-        const sk = SKILLS[action.id];
-        if (!sk) return;
-        if (unit.mp < sk.cost) {
-          this.setMessage('PM insuficiente.');
-          await wait(600);
-        } else {
-          unit.mp -= sk.cost;
-          await this.useSkill(unit, sk, targets);
-        }
-      } else if (action.type === 'item') {
-        await this.useItem(unit, action.id, targets);
-      }
-    } finally {
-      this.busy = false;
-      this.renderParty();
-      this.renderEnemyCards();
-      this.renderActor(unit);
-      if (!this.finished) {
-        this.setMessage('');
-        if (this.turnResolve) {
-          const resolve = this.turnResolve;
-          this.turnResolve = null;
-          resolve();
-        }
-      } else if (this.turnResolve) {
-        const resolve = this.turnResolve;
-        this.turnResolve = null;
-        resolve();
-      }
-    }
-  }
-
-  async useSkill(actor, skill, targets) {
-    if (!targets || !targets.length) return;
-    const side = actor.side;
-    this.setMessage(`${actor.name} usa ${skill.name}!`);
-    actor.lungeUntil = performance.now() + 260;
-    if (side === 'hero') {
-      this.game.audio.sfx(skill.kind === 'magic' || skill.kind === 'heal' ? 'magic' : 'slash');
-    } else {
-      this.game.audio.sfx(skill.kind === 'magic' ? 'magic' : 'hit');
-    }
-    this.fx.shake = Math.max(this.fx.shake, skill.kind === 'phys' ? 5 : 3);
-    await wait(280);
-
-    if (skill.kind === 'phys' || skill.kind === 'magic') {
-      const hits = skill.hits || 1;
-      for (let h = 0; h < hits; h++) {
-        for (const target of targets) {
-          if (!target.alive) continue;
-          const result = this.dealDamage(actor, target, skill);
-          this.floatText(result.crit ? `CRÍTICO ${result.dmg}` : `${result.dmg}`, target, result.crit ? '#ffd06b' : '#f2e5cf', result.crit ? 26 : 21);
-          this.addParticlesAt(target, skill.kind === 'magic' ? '#9f87d8' : '#d5b78a', result.crit ? 18 : 10);
-          if (result.crit) this.fx.shake = 12;
-          if (skill.fx === 'slash' || skill.fx === 'heavy') this.slashFx(target, skill.fx === 'heavy' ? '#e7b76b' : '#f2e4c9');
-          if (skill.fx === 'dawn') this.slashFx(target, '#f4d48e');
-          if (skill.fx === 'quake') {
-            this.fx.shake = 14;
-            this.addParticlesAt(target, '#a28560', 16);
-          }
-          this.checkBossPhase(target);
-          if (!target.alive) this.markDead(target);
-          this.renderEnemyCards();
-          this.renderParty();
-        }
-        if (hits > 1) await wait(170);
-      }
-    } else if (skill.kind === 'heal' || skill.kind === 'healSelf') {
-      const amount = skill.kind === 'healSelf'
-        ? Math.round(actor.maxHp * skill.power)
-        : Math.round(skill.power + this.eff(actor, 'mag') * 2.1);
-      for (const target of targets) {
-        if (!target.alive) continue;
-        const before = target.hp;
-        target.hp = Math.min(target.maxHp, target.hp + amount);
-        const healed = target.hp - before;
-        this.floatText(`+${healed}`, target, '#a8e29d', 23);
-        this.addParticlesAt(target, '#8fd9a1', 14);
-      }
-      this.game.audio.sfx('heal');
-    } else if (skill.kind === 'shield') {
-      const amount = Math.round(skill.power + this.eff(actor, 'mag') * 2.2);
-      for (const target of targets) {
-        target.shield += amount;
-        this.floatText(`+${amount} ESCUDO`, target, '#a8d8e8', 17);
-        this.addParticlesAt(target, '#8bc6e8', 12);
-      }
-      this.game.audio.sfx('shield');
-    } else if (skill.kind === 'buff') {
-      for (const target of targets) {
-        for (const [stat, mult] of Object.entries(skill.buff)) {
-          if (stat === 'turns') continue;
-          target.buffs[stat] = { mult, turns: skill.buff.turns };
-        }
-        this.floatText('▲ FORTALECIDO', target, '#e7c978', 16);
-        this.addParticlesAt(target, '#e2b45e', 12);
-      }
-      this.game.audio.sfx('shield');
-    } else if (skill.kind === 'taunt') {
-      actor.taunt = 2;
+    if (cmd === 'defend') {
       actor.defending = true;
-      this.floatText('PROVOCAR', actor, '#e39a68', 17);
-      this.addParticlesAt(actor, '#e2683d', 12);
-      this.game.audio.sfx('shield');
-    } else if (skill.kind === 'revive') {
-      for (const target of targets) {
-        if (target.alive) continue;
-        target.alive = true;
-        target.hp = Math.max(1, Math.round(target.maxHp * skill.power));
-        this.floatText('RENASCER', target, '#f0d58d', 18);
-        this.addParticlesAt(target, '#f0d58d', 22);
-      }
-      this.game.audio.sfx('levelup');
-    } else if (skill.kind === 'drain') {
-      for (const target of targets) {
-        if (!target.alive) continue;
-        const result = this.dealDamage(actor, target, skill);
-        this.floatText(`${result.dmg}`, target, '#e4b8d3', 20);
-        const heal = Math.round(result.dmg * .55);
-        actor.hp = Math.min(actor.maxHp, actor.hp + heal);
-        this.floatText(`+${heal}`, actor, '#c6a5d8', 17);
-        this.addParticlesAt(target, '#a774a7', 14);
-        this.addParticlesAt(actor, '#a774a7', 8);
-        this.checkBossPhase(target);
-        if (!target.alive) this.markDead(target);
-      }
-      this.game.audio.sfx('magic');
-    } else if (skill.kind === 'debuff') {
-      for (const target of targets) {
-        target.statuses.slow = { turns: 3 };
-        this.floatText('LENTO', target, '#9fb1d7', 16);
-        this.addParticlesAt(target, '#738ab7', 12);
-      }
-      this.game.audio.sfx('magic');
+      audio.sfx('guard');
+      logMsg(state, `${actor.name} ergue a guarda.`);
+      const p = battleActorPos(actor);
+      state.fx.ring(p.x, p.y, { r0: 8, r1: 50, color: '#8ac8ff' });
+      syncHUD(state);
+      await wait(260);
+      return;
     }
-
-    if (skill.status) {
-      for (const target of targets) {
-        if (target.alive) {
-          target.statuses[skill.status] = { turns: skill.statusTurns || 3 };
-          this.floatText(skill.status.toUpperCase(), target, '#d99a6a', 14);
-        }
+    if (cmd === 'flee') {
+      if (!state.canFlee) {
+        ui.toast('Não é possível fugir desta batalha.', 'red', '➜');
+        continue;
       }
+      const ok = chance(0.55 + (actor.lck || 0) * 0.01);
+      audio.sfx(ok ? 'flee' : 'cancel');
+      if (ok) {
+        state.fleeResult = true;
+        logMsg(state, 'O grupo escapa.');
+        await wait(400);
+        return 'flee';
+      }
+      logMsg(state, 'A fuga falhou!');
+      await wait(300);
+      return;
     }
-
-    this.renderParty();
-    this.renderEnemyCards();
-    await wait(620);
   }
+}
 
-  async useItem(actor, itemId, targets) {
-    const item = ITEMS[itemId];
-    if (!item || !this.game.inventory[itemId]) return;
-    this.game.inventory[itemId]--;
-    if (this.game.inventory[itemId] <= 0) delete this.game.inventory[itemId];
-    this.setMessage(`${actor.name} usa ${item.name}.`);
-    this.game.audio.sfx(item.kind === 'damageAll' ? 'hit' : 'heal');
-    await wait(260);
-    if (item.kind === 'damageAll') {
-      for (const target of targets) {
-        if (!target.alive) continue;
-        const dmg = Math.round(item.amount * rand(.9, 1.1));
-        this.damageHp(target, dmg);
-        this.floatText(`${dmg}`, target, '#efae6a', 22);
-        this.addParticlesAt(target, '#e2683d', 14);
-        this.checkBossPhase(target);
-        if (!target.alive) this.markDead(target);
-      }
-      this.fx.shake = 10;
-    } else {
-      for (const target of targets) {
-        if (item.kind === 'heal' && target.alive) {
-          const before = target.hp;
-          target.hp = Math.min(target.maxHp, target.hp + item.amount);
-          this.floatText(`+${target.hp - before}`, target, '#a8e29d', 21);
-        } else if (item.kind === 'mp' && target.alive) {
-          const before = target.mp;
-          target.mp = Math.min(target.maxMp, target.mp + item.amount);
-          this.floatText(`+${target.mp - before} PM`, target, '#9cc8e9', 18);
-        } else if (item.kind === 'full' && target.alive) {
-          target.hp = target.maxHp;
-          target.mp = target.maxMp;
-          this.floatText('RESTAURADO', target, '#f0d58d', 18);
-        } else if (item.kind === 'cure' && target.alive) {
-          delete target.statuses.poison;
-          delete target.statuses.burn;
-          this.floatText('CURADO', target, '#b8d9a3', 17);
-        }
-        this.addParticlesAt(target, '#8fd9a1', 10);
-      }
-    }
-    this.renderParty();
-    this.renderEnemyCards();
-    await wait(560);
+async function enemyTurn(state, actor) {
+  const usable = actor.skills.map((id) => ({ id, sk: SKILLS[id] })).filter((s) => s.sk);
+  let choice = null;
+  if (actor.hp < actor.maxHp * 0.42) {
+    choice = usable.find((s) => s.sk.kind === 'heal');
   }
-
-  dealDamage(actor, target, skill) {
-    const magic = skill.kind === 'magic' || skill.kind === 'drain';
-    const atk = magic ? this.eff(actor, 'mag') : this.eff(actor, 'atk');
-    let def = magic ? target.stats.def * .32 : target.stats.def * .78;
-    if (target.buffs.def) def *= target.buffs.def.mult;
-    let base = atk * skill.power * (magic ? 2.25 : 2.05) - def;
-    base = Math.max(4, base) * rand(.9, 1.1);
-    const critChance = .045 + (actor.stats.luck || 0) * .006;
-    const crit = Math.random() < critChance;
-    if (crit) base *= 1.58;
-    if (target.defending) base *= .48;
-    let dmg = Math.max(1, Math.round(base));
-    if (target.shield > 0) {
-      const absorbed = Math.min(target.shield, dmg);
-      target.shield -= absorbed;
-      dmg -= absorbed;
-      if (absorbed > 0) this.floatText(`-${absorbed} escudo`, target, '#9bcfe4', 14);
-    }
-    if (target.taunt > 0 && !target.defending) dmg = Math.round(dmg * .9);
-    this.damageHp(target, dmg);
-    target.flashUntil = performance.now() + 140;
-    this.fx.flash = Math.max(this.fx.flash, .18);
-    return { dmg, crit };
+  if (!choice && chance(0.16)) choice = { id: null, sk: { name: 'Ataque', kind: 'phys', power: 1, element: 'none', fx: 'slash', sfx: 'hit' } };
+  if (!choice) choice = usable.length ? pick(usable) : null;
+  if (!choice) {
+    const target = pick(state.allies.filter((a) => a.hp > 0));
+    if (target) await basicAttack(state, actor, target);
+    return;
   }
+  if (!choice.id) {
+    const target = pick(state.allies.filter((a) => a.hp > 0));
+    if (target) await basicAttack(state, actor, target);
+    return;
+  }
+  await performSkill(state, actor, choice.id, null, true);
+}
 
-  damageHp(unit, amount) {
-    unit.hp = Math.max(0, unit.hp - amount);
-    if (unit.hp <= 0 && unit.alive) {
-      unit.alive = false;
-      if (unit.side === 'hero') {
-        this.setMessage(`${unit.name} cai. A chama vacila.`);
-        this.game.audio.sfx('hurt');
+function tickStart(state, actor) {
+  actor.defending = false;
+  if (actor.status.burn) {
+    const dmg = Math.max(1, Math.round(actor.maxHp * 0.055));
+    damageTarget(state, null, actor, dmg, { color: '#ff9a4a' });
+    logMsg(state, `${actor.name} queima (${dmg}).`);
+  }
+  if (actor.status.poison) {
+    const dmg = Math.max(1, Math.round(actor.maxHp * 0.07));
+    damageTarget(state, null, actor, dmg, { color: '#8ae08a' });
+    logMsg(state, `${actor.name} sofre com o veneno (${dmg}).`);
+  }
+  const regenBuffs = (actor.buffs || []).filter((b) => b.stat === 'regen');
+  for (const b of regenBuffs) {
+    const healed = healActor(actor, actor.maxHp * (b.mult || 0.06));
+    if (healed > 0) {
+      const p = battleActorPos(actor);
+      state.fx.number(p.x, p.y, `+${healed}`, { color: '#8affb0', size: 20 });
+    }
+  }
+  if (actor.status.stun && actor.status.stun.turns > 0) {
+    actor.status.stun.turns--;
+    if (actor.status.stun.turns <= 0) delete actor.status.stun;
+    logMsg(state, `${actor.name} está atordoado e perde o turno.`);
+    return true;
+  }
+  return false;
+}
+
+function endTurnStatus(actor) {
+  for (const id of Object.keys(actor.status || {})) {
+    if (id === 'stun') continue;
+    actor.status[id].turns--;
+    if (actor.status[id].turns <= 0) delete actor.status[id];
+  }
+  for (const b of actor.buffs || []) b.turns--;
+  actor.buffs = (actor.buffs || []).filter((b) => b.turns > 0);
+}
+
+function beginRound(state) {
+  state.round++;
+  const combatants = [
+    ...state.allies.filter((a) => a.hp > 0),
+    ...state.enemies.filter((e) => e.hp > 0),
+  ];
+  state.order = combatants.sort((a, b) => (b.spd + rand(0, 4)) - (a.spd + rand(0, 4)));
+  state.turnIndex = 0;
+}
+
+function allDead(list) { return list.every((a) => a.hp <= 0); }
+
+async function runBattleLoop(state) {
+  state.round = 0;
+  state.turnIndex = 0;
+  state.order = [];
+  while (true) {
+    if (allDead(state.enemies)) return 'victory';
+    if (allDead(state.allies)) return 'defeat';
+    if (state.fleeResult) return 'flee';
+    if (!state.order.length || state.turnIndex >= state.order.length) beginRound(state);
+    const actor = state.order[state.turnIndex];
+    if (!actor) { state.turnIndex++; continue; }
+    if (actor.hp <= 0) { state.turnIndex++; continue; }
+    state.current = actor;
+    state.phase = actor.isEnemy ? 'enemy' : 'command';
+    syncHUD(state);
+    await wait(actor.isEnemy ? 260 : 90);
+    const skipped = tickStart(state, actor);
+    syncHUD(state);
+    if (!skipped) {
+      if (actor.isEnemy) await enemyTurn(state, actor);
+      else {
+        const r = await allyTurn(state, actor);
+        if (r === 'flee') return 'flee';
       }
     }
+    endTurnStatus(actor);
+    syncHUD(state);
+    state.turnIndex++;
+    await wait(120);
+    if (allDead(state.enemies)) return 'victory';
+    if (allDead(state.allies)) return 'defeat';
+    if (state.fleeResult) return 'flee';
   }
+}
 
-  markDead(unit) {
-    if (unit.alive) return;
-    this.addParticlesAt(unit, unit.side === 'enemy' ? '#d98a5b' : '#9b8d7a', 24);
-    this.fx.shake = Math.max(this.fx.shake, 9);
-    if (unit.side === 'enemy') this.game.audio.sfx('hit');
+function resetBattle(state) {
+  state.enemies = state.enemyIds.map((id, i) => makeEnemy(id, i, state.enemyScale));
+  for (const m of state.allies) {
+    m.hp = m.maxHp;
+    m.mp = m.maxMp;
+    m.status = {};
+    m.buffs = [];
+    m.defending = false;
+    m.flashT = 0;
+    m.anim = null;
   }
+  state.logMsgs = [];
+  state.order = [];
+  state.turnIndex = 0;
+  state.round = 0;
+  state.current = null;
+  state.phase = 'command';
+  state.fleeResult = false;
+  if (state.fx) state.fx.clear();
+  setupBattleUI(state);
+}
 
-  checkBossPhase(target) {
-    if (target.side !== 'enemy' || !target.boss || target.phase2) return;
-    if (target.hp <= target.maxHp * .5 && target.alive) {
-      target.phase2 = true;
-      target.buffs.atk = { mult: 1.25, turns: 99 };
-      target.buffs.mag = { mult: 1.25, turns: 99 };
-      target.buffs.spd = { mult: 1.15, turns: 99 };
-      target.flashUntil = performance.now() + 300;
-      this.fx.flash = .65;
-      this.fx.shake = 20;
-      this.game.audio.sfx('boss');
-      if (target.id === 'warden') {
-        this.setMessage('Gorr ruge. "O ABISMO NÃO DEVOLVE NINGUÉM!"');
-      } else if (target.id === 'darian') {
-        this.setMessage('Darian parte o próprio brasão. "Eu não vou voltar a ser sombra de ninguém!"');
-      } else if (target.id === 'lyra') {
-        this.setMessage('A Coroa desperta. "ENTÃO VENHA, CAVALEIRO DE CINZAS."');
-      } else if (target.id === 'voss') {
-        this.setMessage('Voss arranca a máscara. "A fé não precisa de rosto."');
-      }
-      this.addParticlesAt(target, '#e2683d', 34);
+async function victory(state) {
+  const game = state.game;
+  const xp = state.enemies.reduce((n, e) => n + (e.xp || 0), 0);
+  const gold = state.enemies.reduce((n, e) => n + (e.gold || 0), 0);
+  game.gold += gold;
+  game.battlesWon = (game.battlesWon || 0) + 1;
+  const levelUps = [];
+  for (const m of game.party) {
+    if (m.hp <= 0) m.hp = Math.max(1, Math.round(m.maxHp * 0.15));
+    m.xp += xp;
+    while (m.xp >= xpToNext(m.level) && m.level < 60) {
+      m.xp -= xpToNext(m.level);
+      const gains = levelUpMember(m, 1);
+      levelUps.push({ member: m, gains });
     }
   }
+  for (const m of game.party) {
+    m.status = {}; m.buffs = []; m.defending = false; m.flashT = 0; m.anim = null;
+  }
+  audio.playMusic('victory', { restart: true });
+  audio.sfx('victory');
+  const lvHtml = levelUps.length
+    ? `<div class="levelup-list">${levelUps.map(({ member, gains }) => {
+        const g = gains[0];
+        const newSkills = g.newSkills.map((sid) => SKILLS[sid]?.name).filter(Boolean);
+        return `<div class="levelup-row"><b>${member.name}</b> alcançou o nível ${member.level}!${newSkills.length ? `<span class="newskill">Nova habilidade: ${newSkills.join(', ')}</span>` : ''}</div>`;
+      }).join('')}</div>`
+    : '';
+  await ui.modal({
+    kicker: 'Vitória',
+    title: 'A aurora resiste',
+    sub: `+${xp} XP · +${gold} ◈`,
+    body: `<p style="font-size:18px;color:#c9c5b8;text-align:center">A poeira baixa. O caminho continua.</p>${lvHtml}`,
+    actions: [{ label: 'Continuar', value: 'ok', primary: true }],
+  });
+  if (levelUps.length) audio.sfx('levelup');
+  syncHUD(state);
+  ui.updateHUD(game);
+}
 
-  slashFx(target, color) {
-    const { x, y } = this.pos(target);
-    for (let i = 0; i < 3; i++) {
-      this.fx.particles.push({
-        kind: 'slash', x: x + rand(-14, 14), y: y - 50 + rand(-18, 18),
-        radius: rand(22, 44), a0: rand(-1.4, -.4), a1: rand(.4, 1.4),
-        life: .34, maxLife: .34, color, size: rand(2, 4)
-      });
+async function defeat(state) {
+  audio.playMusic('defeat', { restart: true });
+  audio.sfx('defeat');
+  const choice = await ui.modal({
+    kicker: 'Derrota',
+    title: 'A aurora se apagou',
+    sub: 'Mas o amanhecer insiste.',
+    body: '<p style="font-size:18px;color:#c9c5b8;text-align:center">Kael cai. Por um instante, não há mais nada — só o eco de uma promessa.<br><br>Você pode tentar novamente ou voltar ao título.</p>',
+    actions: [
+      { label: 'Tentar novamente', value: 'retry', primary: true },
+      { label: 'Voltar ao título', value: 'title', cancel: true },
+    ],
+  });
+  return choice;
+}
+
+export async function startBattle(game, ids, opts = {}) {
+  const state = {
+    game,
+    allies: game.party,
+    enemies: [],
+    enemyIds: ids,
+    enemyScale: opts.scale || 1,
+    ctx: document.getElementById('game').getContext('2d'),
+    w: window.innerWidth, h: window.innerHeight,
+    bg: opts.bg || 'forest',
+    ambient: opts.ambient || ARENA_AMBIENT[opts.bg] || 'dust',
+    canFlee: opts.canFlee !== false,
+    time: 0, lastTime: 0,
+    current: null, phase: 'command', round: 0,
+    order: [], turnIndex: 0,
+    log: [], logMsgs: [],
+    fx: null, hoverTarget: null,
+    fleeResult: false,
+  };
+  activeBattle = state;
+  state.enemies = ids.map((id, i) => makeEnemy(id, i, state.enemyScale));
+  setupBattleUI(state);
+  audio.playMusic(opts.boss ? 'boss' : 'battle', { restart: true });
+  logMsg(state, opts.intro || 'O inimigo bloqueia o caminho!');
+  syncHUD(state);
+  await wait(450);
+
+  let outcome = 'ok';
+  while (true) {
+    const result = await runBattleLoop(state);
+    if (result === 'victory') {
+      await victory(state);
+      break;
     }
+    if (result === 'flee') {
+      audio.sfx('flee');
+      logMsg(state, 'O grupo recua.');
+      await wait(400);
+      outcome = 'flee';
+      break;
+    }
+    const choice = await defeat(state);
+    if (choice === 'retry') {
+      resetBattle(state);
+      audio.playMusic(opts.boss ? 'boss' : 'battle', { restart: true });
+      logMsg(state, 'A aurora responde. Levante-se.');
+      syncHUD(state);
+      await wait(500);
+      continue;
+    }
+    teardownBattleUI();
+    activeBattle = null;
+    return 'title';
   }
 
-  addParticles(x, y, color, count, spread = 30) {
-    for (let i = 0; i < count; i++) {
-      this.fx.particles.push({
-        kind: 'dot', x: x + rand(-spread, spread), y: y - rand(10, 90),
-        vx: rand(-90, 90), vy: rand(-120, -10), gravity: 180,
-        life: rand(.35, .8), maxLife: .8, color, size: rand(1.5, 3.5)
-      });
-    }
-  }
-
-  addParticlesAt(unit, color, count, spread = 30) {
-    const { x, y } = this.pos(unit);
-    this.addParticles(x, y, color, count, spread);
-  }
-
-  ringFx(target, color) {
-    const { x, y } = this.pos(target);
-    this.fx.particles.push({ kind: 'ring', x, y: y - 40, radius: 80, life: .5, maxLife: .5, color });
-  }
-
-  floatText(text, unit, color, size = 20) {
-    const { x, y } = this.pos(unit);
-    this.fx.floaters.push({ text, x, y: y - 95, color, size, life: 1.1, maxLife: 1.1 });
-  }
-
-  pos(unit) {
-    if (unit.side === 'hero') {
-      const n = this.heroes.length;
-      const start = 300 - (n - 1) * 55;
-      return { x: start + unit.index * 110, y: 350 };
-    }
-    const n = this.enemies.length;
-    const start = n === 1 ? 760 : n === 2 ? 700 : 640;
-    return { x: start + unit.index * (n === 1 ? 0 : n === 2 ? 150 : 140), y: 352 };
-  }
-
-  checkEnd() {
-    if (this.finished) return true;
-    if (this.heroes.every(h => !h.alive)) {
-      this.finished = true;
-      this.result = 'defeat';
-      this.setMessage('A escuridão toma o campo...');
-      this.game.audio.sfx('defeat');
-      return true;
-    }
-    if (this.enemies.every(e => !e.alive)) {
-      this.finished = true;
-      this.result = 'win';
-      this.setMessage('Vitória!');
-      return true;
-    }
-    return false;
-  }
-
-  async victorySequence() {
-    this.setMessage('');
-    this.game.audio.sfx('victory');
-    const xp = this.enemies.reduce((a, e) => a + (e.xp || 0), 0);
-    const gold = this.enemies.reduce((a, e) => a + (e.gold || 0), 0);
-    const loot = {};
-    for (const e of this.enemies) {
-      if (e.boss) loot.shard = (loot.shard || 0) + (e.id === 'darian' ? 2 : 1);
-    }
-    const levelUps = [];
-    for (const hero of this.heroes) {
-      const res = this.game.gainXp(hero.id, xp);
-      if (res.levels > 0) levelUps.push(`${hero.name} alcançou o nível ${res.member.level}!`);
-      hero.level = res.member.level;
-      hero.maxHp = res.member.maxHp;
-      hero.maxMp = res.member.maxMp;
-      hero.stats = { ...res.member.stats };
-    }
-    this.game.gold += gold;
-    for (const [id, count] of Object.entries(loot)) this.game.addItem(id, count);
-    this.game.syncPartyFromBattle(this.heroes);
-    this.game.updateHUD();
-
-    this.rewards = { xp, gold, loot, levelUps };
-    this.el.result.innerHTML = `
-      <div class="result-card">
-        <span class="eyebrow">VITÓRIA</span>
-        <h2>${this.encounter.title || 'Batalha vencida'}</h2>
-        <p class="result-sub">${this.encounter.victory || 'O caminho se abre.'}</p>
-        <div class="result-stats">
-          <span><b>+${xp}</b> XP</span>
-          <span><b>+${gold}</b> ouro</span>
-          ${Object.entries(loot).map(([id, n]) => `<span><b>+${n}</b> ${ITEMS[id]?.name || id}</span>`).join('')}
-        </div>
-        ${levelUps.length ? `<div class="result-levelups">${levelUps.map(t => `<strong>✦</strong> ${t}`).join('<br>')}</div>` : '<div class="result-levelups" style="opacity:.65">A experiência fortalece o grupo.</div>'}
-        <button class="primary-btn" id="battle-continue">Continuar</button>
-      </div>`;
-    this.el.result.classList.remove('hidden');
-    await new Promise(resolve => {
-      const btn = document.getElementById('battle-continue');
-      if (btn) btn.addEventListener('click', resolve, { once: true });
-      else resolve();
-    });
-    this.el.result.classList.add('hidden');
-  }
-
-  update(dt) {
-    this.fx.shake = Math.max(0, this.fx.shake - dt * 35);
-    this.fx.flash = Math.max(0, this.fx.flash - dt * 2.2);
-    for (const p of this.fx.particles) {
-      p.life -= dt;
-      if (p.kind === 'dot') {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vy += p.gravity * dt;
-      }
-    }
-    this.fx.particles = this.fx.particles.filter(p => p.life > 0);
-    for (const f of this.fx.floaters) {
-      f.life -= dt;
-      f.y -= dt * 34;
-    }
-    this.fx.floaters = this.fx.floaters.filter(f => f.life > 0);
-  }
-
-  draw(ctx, t) {
-    const now = performance.now();
-    ctx.save();
-    if (this.fx.shake > .2) {
-      ctx.translate(rand(-this.fx.shake, this.fx.shake), rand(-this.fx.shake * .6, this.fx.shake * .6));
-    }
-    drawBattleBackground(ctx, this.background, t);
-
-    // active rings
-    for (const u of [...this.heroes, ...this.enemies]) {
-      if (!u.alive) continue;
-      const { x, y } = this.pos(u);
-      if (u === this.active) {
-        ctx.save();
-        ctx.globalAlpha = .45 + Math.sin(t * 4) * .12;
-        ctx.strokeStyle = '#e2b45e';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.ellipse(x, y + 2, 34, 9, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      if (u.taunt > 0) {
-        ctx.save();
-        ctx.globalAlpha = .35;
-        ctx.strokeStyle = '#e2683d';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x, y - 40, 48 + Math.sin(t * 5) * 3, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      if (u.shield > 0) {
-        ctx.save();
-        ctx.globalAlpha = .3;
-        ctx.strokeStyle = '#8bc6e8';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(x, y - 38, 34, 52, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = .07;
-        ctx.fillStyle = '#8bc6e8';
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // heroes
-    for (const h of this.heroes) {
-      const { x, y } = this.pos(h);
-      let ox = 0;
-      if (h.lungeUntil > now) ox = 16 * ((h.lungeUntil - now) / 260);
-      const flash = h.flashUntil > now;
-      if (!h.alive) {
-        ctx.save();
-        ctx.globalAlpha = .28;
-        ctx.translate(x, y);
-        ctx.rotate(-.45);
-        drawCharacter(ctx, h.id, 0, 0, 'right', 0, 2, { battle: true, time: t });
-        ctx.restore();
-      } else {
-        if (flash) ctx.filter = 'brightness(2.2) saturate(.2)';
-        drawCharacter(ctx, h.id, x + ox, y, 'right', Math.floor(t * 2 + h.index) % 2, 2, { battle: true, time: t });
-        ctx.filter = 'none';
-      }
-      this.drawStatusIcons(ctx, h, x, y - 94);
-    }
-
-    // enemies
-    for (const e of this.enemies) {
-      const { x, y } = this.pos(e);
-      let ox = 0;
-      if (e.lungeUntil > now) ox = -18 * ((e.lungeUntil - now) / 260);
-      const flash = e.flashUntil > now;
-      if (e.boss) {
-        ctx.save();
-        ctx.globalAlpha = e.alive ? .22 : .08;
-        const g = ctx.createRadialGradient(x, y - 80, 10, x, y - 80, 120);
-        g.addColorStop(0, e.id === 'lyra' ? '#b53b54' : '#d8a84f');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y - 80, 120, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-      drawEnemy(ctx, e.art, x + ox, y, (ENEMIES[e.id].scale || 1) * 1.0, t, flash, 1, !e.alive);
-      this.drawStatusIcons(ctx, e, x, y - (e.boss ? 170 : 100));
-    }
-
-    drawParticles(ctx, this.fx.particles);
-    drawFloaters(ctx, this.fx.floaters);
-
-    if (this.fx.flash > 0) {
-      ctx.globalAlpha = Math.min(.7, this.fx.flash);
-      ctx.fillStyle = this.fx.flashColor;
-      ctx.fillRect(-40, -40, 1024 + 80, 576 + 80);
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
-  }
-
-  drawStatusIcons(ctx, unit, x, y) {
-    const icons = [];
-    if (unit.statuses.poison) icons.push('☠');
-    if (unit.statuses.burn) icons.push('✹');
-    if (unit.statuses.slow) icons.push('❄');
-    if (unit.buffs.atk) icons.push('▲');
-    if (unit.buffs.def) icons.push('◆');
-    if (!icons.length) return;
-    ctx.save();
-    ctx.font = '600 12px Cinzel, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(5,7,12,.72)';
-    const text = icons.join(' ');
-    const width = ctx.measureText(text).width + 12;
-    ctx.fillRect(x - width / 2, y - 9, width, 18);
-    ctx.fillStyle = '#f0d58d';
-    ctx.fillText(text, x, y);
-    ctx.restore();
-  }
-
-  bindUi() {
-    this.el.commands.addEventListener('click', this.onCommandClick);
-    this.attachKeys();
-  }
+  teardownBattleUI();
+  activeBattle = null;
+  audio.stopMusic(0.3);
+  return outcome;
 }
