@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0e1c">
+  <meta name="description" content="Aurora Partida — um RPG de turnos sobre traição, ruína e renascimento.">
+  <title>Aurora Partida — A Ascensão de Rowan</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="stage">
+      <div id="bezel">
+        <canvas id="game" width="960" height="600" aria-label="Aurora Partida, um RPG de turnos"></canvas>
+        <div id="scanlines" aria-hidden="true"></div>
+        <div id="loading" aria-hidden="true">
+          <div class="load-mark">✦</div>
+          <div class="load-text">Acendendo a aurora…</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="portrait-extras" aria-hidden="true">
+      <div class="pe-brand">AURORA PARTIDA</div>
+      <div class="pe-sub">traição · ruína · renascimento</div>
+    </div>
+
+    <div id="touch" aria-hidden="true">
+      <div class="touch-side">
+        <div class="dpad">
+          <button class="tbtn d-up" data-key="up" aria-label="Cima">▲</button>
+          <button class="tbtn d-left" data-key="left" aria-label="Esquerda">◀</button>
+          <button class="tbtn d-down" data-key="down" aria-label="Baixo">▼</button>
+          <button class="tbtn d-right" data-key="right" aria-label="Direita">▶</button>
+        </div>
+      </div>
+      <div class="touch-side right">
+        <button class="tbtn round t-menu" data-key="menu" aria-label="Menu">☰</button>
+        <button class="tbtn round t-action" data-key="action" aria-label="Interagir">A</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/data.js"></script>
+  <script src="src/art.js"></script>
+  <script src="src/art-battle.js"></script>
+  <script src="src/art-bg.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/ui.js"></script>
+  <script src="src/battle.js"></script>
+  <script src="src/battle-render.js"></script>
+  <script src="src/story.js"></script>
+  <script src="src/world.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
