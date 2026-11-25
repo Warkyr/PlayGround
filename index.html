@@ -3,55 +3,212 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#0a0e1c">
-  <meta name="description" content="Aurora Partida — um RPG de turnos sobre traição, ruína e renascimento.">
-  <title>Aurora Partida — A Ascensão de Rowan</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="theme-color" content="#090b12">
+  <meta name="description" content="Cinzas de Valdoria — um RPG de turnos sobre amor, traição e recomeço.">
+  <title>Cinzas de Valdoria — A Lenda do Cavaleiro das Cinzas</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app">
-    <div id="stage">
-      <div id="bezel">
-        <canvas id="game" width="960" height="600" aria-label="Aurora Partida, um RPG de turnos"></canvas>
-        <div id="scanlines" aria-hidden="true"></div>
-        <div id="loading" aria-hidden="true">
-          <div class="load-mark">✦</div>
-          <div class="load-text">Acendendo a aurora…</div>
-        </div>
-      </div>
-    </div>
+    <div id="game-shell">
+      <div id="frame">
+        <canvas id="game-canvas" width="1024" height="576" aria-label="Mundo de Cinzas de Valdoria"></canvas>
+        <div id="grain" aria-hidden="true"></div>
+        <div id="vignette" aria-hidden="true"></div>
 
-    <div id="portrait-extras" aria-hidden="true">
-      <div class="pe-brand">AURORA PARTIDA</div>
-      <div class="pe-sub">traição · ruína · renascimento</div>
-    </div>
-
-    <div id="touch" aria-hidden="true">
-      <div class="touch-side">
-        <div class="dpad">
-          <button class="tbtn d-up" data-key="up" aria-label="Cima">▲</button>
-          <button class="tbtn d-left" data-key="left" aria-label="Esquerda">◀</button>
-          <button class="tbtn d-down" data-key="down" aria-label="Baixo">▼</button>
-          <button class="tbtn d-right" data-key="right" aria-label="Direita">▶</button>
+        <div id="hud" aria-live="polite">
+          <div id="party-hud"></div>
+          <div class="hud-right">
+            <button id="menu-btn" class="icon-btn" title="Menu (M)" aria-label="Abrir menu">☰</button>
+            <div id="objective-card">
+              <span class="objective-label">OBJETIVO</span>
+              <span id="objective-text">Fale com Lyra na fonte.</span>
+            </div>
+            <div id="gold-hud"><span class="coin">◆</span> <span id="gold-text">0</span></div>
+          </div>
         </div>
-      </div>
-      <div class="touch-side right">
-        <button class="tbtn round t-menu" data-key="menu" aria-label="Menu">☰</button>
-        <button class="tbtn round t-action" data-key="action" aria-label="Interagir">A</button>
+
+        <div id="location-card" aria-hidden="true">
+          <span id="location-region">BRUMA</span>
+          <strong id="location-name">Vila dos Ferreiros</strong>
+        </div>
+
+        <div id="interact-hint" aria-hidden="true"><kbd>E</kbd> conversar</div>
+
+        <div id="touch-controls" aria-hidden="true">
+          <div id="dpad">
+            <button class="dpad-btn up" data-dir="up" aria-label="Mover para cima">▲</button>
+            <button class="dpad-btn left" data-dir="left" aria-label="Mover para a esquerda">◀</button>
+            <button class="dpad-btn right" data-dir="right" aria-label="Mover para a direita">▶</button>
+            <button class="dpad-btn down" data-dir="down" aria-label="Mover para baixo">▼</button>
+          </div>
+          <button id="touch-action" aria-label="Interagir">E</button>
+        </div>
+
+        <div id="dialogue-layer" class="hidden" role="dialog" aria-live="polite">
+          <div class="dialogue-frame">
+            <div id="portrait-wrap"><canvas id="dialogue-portrait" width="144" height="144"></canvas></div>
+            <div class="dialogue-main">
+              <div id="dialogue-name"></div>
+              <p id="dialogue-text"></p>
+              <div id="dialogue-choices"></div>
+            </div>
+            <div class="dialogue-hint"><span id="dialogue-continue">▼</span><span class="dialogue-hint-text">ESPAÇO</span></div>
+          </div>
+        </div>
+
+        <div id="battle-ui" class="hidden" aria-label="Batalha por turnos">
+          <div class="battle-top">
+            <div id="battle-round">RODADA 1</div>
+            <div id="turn-order" aria-label="Ordem dos turnos"></div>
+            <div id="battle-enemies"></div>
+          </div>
+          <div id="battle-message"><span></span></div>
+          <div class="battle-bottom">
+            <div id="battle-party"></div>
+            <div class="battle-command-row">
+              <div id="battle-actor">
+                <canvas id="battle-actor-portrait" width="128" height="128"></canvas>
+                <div class="actor-copy">
+                  <span id="battle-actor-name">Kael</span>
+                  <div class="mini-bars">
+                    <div class="mini-bar hp"><i id="actor-hp-bar"></i></div>
+                    <div class="mini-bar mp"><i id="actor-mp-bar"></i></div>
+                  </div>
+                  <span id="battle-actor-hint">Escolha uma ação</span>
+                </div>
+              </div>
+              <div id="battle-commands"></div>
+            </div>
+          </div>
+          <div id="battle-result" class="hidden"></div>
+        </div>
+
+        <div id="menu-overlay" class="panel-overlay hidden" role="dialog" aria-modal="true" aria-label="Menu">
+          <div class="ornate-panel menu-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="eyebrow">DIÁRIO DO CAVALEIRO</span>
+                <h2>Menu</h2>
+              </div>
+              <button class="close-btn" data-close="menu-overlay" aria-label="Fechar menu">✕</button>
+            </div>
+            <div class="menu-tabs" role="tablist">
+              <button class="tab active" data-tab="party">Heróis</button>
+              <button class="tab" data-tab="items">Itens</button>
+              <button class="tab" data-tab="journal">Diário</button>
+              <button class="tab" data-tab="save">Salvar</button>
+            </div>
+            <div id="menu-content"></div>
+            <p class="panel-footnote">Pressione <kbd>M</kbd> ou <kbd>Esc</kbd> para voltar ao jogo.</p>
+          </div>
+        </div>
+
+        <div id="shop-overlay" class="panel-overlay hidden" role="dialog" aria-modal="true" aria-label="Loja">
+          <div class="ornate-panel shop-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="eyebrow" id="shop-eyebrow">MERCADOR</span>
+                <h2 id="shop-title">Loja</h2>
+              </div>
+              <button class="close-btn" data-close="shop-overlay" aria-label="Fechar loja">✕</button>
+            </div>
+            <div class="shop-wallet">Seu ouro: <strong id="shop-gold">0</strong></div>
+            <div id="shop-content"></div>
+            <p class="panel-footnote" id="shop-footnote">O que a estrada não leva, o ouro compra.</p>
+          </div>
+        </div>
+
+        <div id="chapter-card" class="cinematic-overlay hidden">
+          <div class="chapter-ornament"></div>
+          <p id="chapter-kicker">PRÓLOGO</p>
+          <h2 id="chapter-title">A Noite da Colheita</h2>
+          <p id="chapter-quote"></p>
+          <button id="chapter-continue" class="ghost-btn">Continuar <span>›</span></button>
+        </div>
+
+        <div id="ending-screen" class="cinematic-overlay hidden">
+          <div class="ending-inner">
+            <span class="eyebrow">FIM</span>
+            <h2>CINZAS DE VALDORIA</h2>
+            <p id="ending-text"></p>
+            <div id="ending-stats" class="ending-stats"></div>
+            <div class="ending-actions">
+              <button id="ending-continue" class="primary-btn">Continuar a lenda</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="title-screen" class="title-screen">
+          <div class="title-shade"></div>
+          <div class="title-content">
+            <div class="title-crest" aria-hidden="true">
+              <span class="crest-wing left"></span>
+              <span class="crest-crown">♜</span>
+              <span class="crest-wing right"></span>
+            </div>
+            <p class="title-eyebrow">UM RPG DE TURNOS</p>
+            <h1 class="game-logo"><span>CINZAS</span><span class="logo-de">DE</span><span>VALDORIA</span></h1>
+            <p class="title-tagline">A lenda do Cavaleiro das Cinzas</p>
+            <div class="title-rule"><i></i><b>✦</b><i></i></div>
+            <nav class="title-menu" aria-label="Menu principal">
+              <button id="new-game" class="primary-btn title-btn">Novo Jogo</button>
+              <button id="continue-game" class="ghost-btn title-btn" disabled>Continuar</button>
+              <div class="title-minor">
+                <button id="help-btn" class="text-btn">Como jogar</button>
+                <span>·</span>
+                <button id="sound-btn" class="text-btn">Som: ligado</button>
+              </div>
+            </nav>
+          </div>
+          <div class="title-footer">
+            <span>Uma história de amor, traição e recomeço</span>
+            <span class="title-stars">✦</span>
+            <span>Jogue com teclado, mouse ou toque</span>
+          </div>
+          <div class="title-version">v1.0</div>
+        </div>
+
+        <div id="help-overlay" class="panel-overlay hidden" role="dialog" aria-modal="true" aria-label="Como jogar">
+          <div class="ornate-panel help-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="eyebrow">GUIA DO CAVALEIRO</span>
+                <h2>Como jogar</h2>
+              </div>
+              <button class="close-btn" data-close="help-overlay" aria-label="Fechar ajuda">✕</button>
+            </div>
+            <div class="help-grid">
+              <div><span class="keycap">W A S D</span><p>Mover Kael pelo mundo. Setas também funcionam.</p></div>
+              <div><span class="keycap">E / ESPAÇO</span><p>Conversar, abrir baús e examinar objetos.</p></div>
+              <div><span class="keycap">M / ESC</span><p>Abrir o menu de heróis, itens e diário.</p></div>
+              <div><span class="keycap">1 — 9</span><p>Escolher ações e alvos nas batalhas.</p></div>
+            </div>
+            <div class="help-tip">
+              <strong>Dica de forja:</strong> use o acampamento para comprar suprimentos, melhorar armas e salvar antes do assalto final. A resistência precisa de você vivo.
+            </div>
+            <button class="primary-btn" data-close="help-overlay">Entendido</button>
+          </div>
+        </div>
+
+        <div id="defeat-overlay" class="cinematic-overlay hidden">
+          <div class="defeat-inner">
+            <span class="eyebrow">A CHAMA SE APAGOU</span>
+            <h2>Mas as cinzas guardam brasas.</h2>
+            <p>Kael cai. O eco da batalha se perde na escuridão... e o destino oferece outra chance.</p>
+            <div class="defeat-actions">
+              <button id="retry-battle" class="primary-btn">Tentar novamente</button>
+              <button id="defeat-title" class="ghost-btn">Voltar ao título</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="toast" role="status" aria-live="polite"></div>
+        <div id="fade-layer"></div>
       </div>
     </div>
   </div>
-
-  <script src="src/data.js"></script>
-  <script src="src/art.js"></script>
-  <script src="src/art-battle.js"></script>
-  <script src="src/art-bg.js"></script>
-  <script src="src/audio.js"></script>
-  <script src="src/ui.js"></script>
-  <script src="src/battle.js"></script>
-  <script src="src/battle-render.js"></script>
-  <script src="src/story.js"></script>
-  <script src="src/world.js"></script>
-  <script src="src/main.js"></script>
+  <noscript>Este jogo precisa de JavaScript ativado.</noscript>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
