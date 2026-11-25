@@ -697,6 +697,18 @@ async function startSession() {
   }
 }
 
+// Development/debug hook: useful for QA without exposing it in the UI.
+window.__lamina = {
+  get game() { return game; },
+  get mode() { return mode; },
+  get player() { return player; },
+  get map() { return currentMap; },
+  get blockers() { return [...blockers]; },
+  get input() { return Input; },
+  newGame, loadGame, saveGame, readSave,
+  gotoMap, runBattle, runStory, storyCtx,
+};
+
 async function boot() {
   resize();
   window.addEventListener('resize', resize);
