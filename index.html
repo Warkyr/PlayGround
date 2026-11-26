@@ -63,7 +63,7 @@
             <g class="map-pin" id="capitalPin"><circle r="8"/><circle r="3"/></g>
           </g>
         </svg>
-        <div class="map-legend"><span><i class="legend-dot own"></i>SEU PAÍS</span><span><i class="legend-dot neutral"></i>PAÍSES</span><span><i class="legend-dot war"></i>CONFLITO</span></div>
+        <div class="map-legend"><span><i class="legend-dot own"></i>SEU PAÍS</span><span><i class="legend-dot neutral"></i>PAÍSES</span><span><i class="legend-dot war"></i>CONFLITO</span><span><i class="legend-dot owned"></i>ANEXADO</span></div>
         <div class="map-tip hidden" id="mapTip"></div>
       </section>
 
@@ -71,19 +71,20 @@
         <div class="nation-banner"><div class="nation-flag" id="flag">🌐</div><div><small>NAÇÃO SELECIONADA</small><h1 id="nationName">Escolha uma nação</h1><div id="nationSub" class="nation-sub">Inicie uma campanha para governar</div></div></div>
         <div class="panel-tabs"><button class="panel-tab active" data-panel="overview">VISÃO GERAL</button><button class="panel-tab" data-panel="actions">AÇÕES</button></div>
         <div class="intel-content" id="overviewPanel">
-          <div class="panel-heading">INDICADORES NACIONAIS <span>▤</span></div>
+          <div class="panel-heading" id="indicatorsHeading">INDICADORES NACIONAIS <span>▤</span></div>
           <div class="key-indicator"><div><small>PRODUTO INTERNO BRUTO</small><b id="gdp">—</b></div><div class="growth" id="gdpGrowth">—</div></div>
           <div class="indicator-row"><span>PIB per capita</span><b id="gdpCapita">—</b></div><div class="indicator-row"><span>Inflação anual</span><b id="inflation">—</b></div><div class="indicator-row"><span>Desemprego</span><b id="unemployment">—</b></div><div class="indicator-row"><span>Dívida pública</span><b id="debt">—</b></div>
-          <div class="panel-heading separated">MANDATO <span id="dateLabel">JAN 2026</span></div>
+          <div class="panel-heading separated" id="mandateHeading">MANDATO <span id="dateLabel">JAN 2026</span></div>
           <div class="mandate"><div class="mandate-ring" id="stabilityRing"><b id="stability">—</b></div><div><small>ÍNDICE DE ESTABILIDADE</small><strong id="statusLabel">Aguardando</strong><span>Popularidade <b id="approval">—</b></span></div></div>
-          <div class="panel-heading separated">REGISTRO <span>● AO VIVO</span></div><div id="events" class="events"><div class="event empty-event">Eventos do mandato aparecerão aqui.</div></div>
+          <div class="objective-line" id="objectiveLine"><span>META · 12 MESES ≥ 70</span><b id="objectiveProgress">0/12 meses</b></div>
+          <div class="panel-heading separated" id="recordHeading">REGISTRO <span>● AO VIVO</span></div><div id="events" class="events" aria-live="polite"><div class="event empty-event">Eventos do mandato aparecerão aqui.</div></div>
         </div>
         <div class="intel-content hidden" id="actionsPanel">
           <div class="panel-heading">POLÍTICA ECONÔMICA</div><p class="panel-copy">Escolha medidas para equilibrar crescimento, emprego e contas públicas.</p>
           <button class="policy-card" id="stimulus"><span class="policy-icon">↗</span><span><b>Estímulo econômico</b><small>Custo $20 bi · crescimento ↑ · dívida ↑</small></span><i>›</i></button>
           <button class="policy-card" id="austerity"><span class="policy-icon">⚖</span><span><b>Ajuste fiscal</b><small>Custo $10 bi · dívida ↓ · popularidade ↓</small></span><i>›</i></button>
           <button class="policy-card" id="industry"><span class="policy-icon">⌂</span><span><b>Plano industrial</b><small>Custo $35 bi · produção ↑ · emprego ↑</small></span><i>›</i></button>
-          <div class="panel-heading separated">DIPLOMACIA E GUERRA</div><p class="panel-copy">Selecione um país no mapa para abrir opções diplomáticas e militares.</p>
+          <div class="panel-heading separated" id="diplomacyHeading">DIPLOMACIA E GUERRA</div><p class="panel-copy">Selecione um país no mapa para abrir opções diplomáticas e militares.</p>
           <div id="selectedActions" class="selected-actions">Nenhum país selecionado</div>
           <div id="relationActions" class="relation-actions hidden"></div>
         </div>
@@ -98,16 +99,17 @@
 
     <div id="countrySelect" class="modal-backdrop">
       <div class="start-modal">
-        <div class="modal-kicker">CAMPANHA · 2026</div><h2>O continente<br/><em>está em suas mãos.</em></h2>
+        <button class="modal-close hidden" id="closeSelect" title="Continuar campanha" aria-label="Continuar campanha">×</button>
+        <div class="modal-kicker" id="selectKicker">CAMPANHA · 2026</div><h2>O continente<br/><em>está em suas mãos.</em></h2>
         <p>Escolha uma nação. Conduza sua economia, construa alianças e decida o futuro das Américas.</p>
         <div class="select-label">ESCOLHA SEU PAÍS <span>PAÍSES JOGÁVEIS</span></div>
         <div id="countryCards" class="country-cards"></div>
-        <div class="modal-foot"><span>◈ ECONOMIA · DIPLOMACIA · ESTRATÉGIA</span><span>SELECIONE PARA COMEÇAR</span></div>
+        <div class="modal-foot"><span>◈ ECONOMIA · DIPLOMACIA · ESTRATÉGIA</span><span id="selectHint">SELECIONE PARA COMEÇAR</span></div>
       </div>
     </div>
-    <div id="helpModal" class="modal-backdrop hidden"><div class="help-modal"><button class="modal-close" id="closeHelp">×</button><div class="modal-kicker">GUIA DO COMANDANTE</div><h2>Como jogar</h2><p><b>Governar:</b> abra <em>Ações</em> para investir na economia ou reduzir a dívida. As escolhas afetam o crescimento e a estabilidade.</p><p><b>Diplomacia:</b> selecione um país no mapa para negociar, enviar cooperação ou declarar guerra.</p><p><b>Conflito:</b> após declarar guerra, volte ao país e use <em>Anexar</em>. É necessário poder militar superior e tesouro suficiente.</p><p><b>Tempo:</b> avance mês a mês ou use velocidades maiores. A economia evolui com o tempo.</p><button id="closeHelpBottom" class="advance">ENTENDI</button></div></div>
+    <div id="helpModal" class="modal-backdrop hidden"><div class="help-modal"><button class="modal-close" id="closeHelp">×</button><div class="modal-kicker">GUIA DO COMANDANTE</div><h2>Como jogar</h2><p><b>Objetivo:</b> mantenha a estabilidade em 70 ou mais por 12 meses para concluir o mandato.</p><p><b>Governar:</b> abra <em>Ações</em> para investir na economia ou reduzir a dívida. As escolhas afetam o crescimento e a estabilidade.</p><p><b>Diplomacia:</b> selecione um país no mapa para negociar, enviar cooperação ou declarar guerra.</p><p><b>Conflito:</b> após declarar guerra, volte ao país e use <em>Anexar</em>. É necessário poder militar superior e tesouro suficiente. Se preferir recuar, use <em>Propor paz</em>.</p><p><b>Tempo:</b> avance mês a mês ou use velocidades maiores. A economia evolui com o tempo.</p><button id="closeHelpBottom" class="advance">ENTENDI</button></div></div>
     <div class="portrait-warning"><div class="rotate-icon">▱</div><b>VIRE SEU DISPOSITIVO</b><span>Hemisfério foi feito para jogar em tela deitada.</span></div>
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </main>
   <script src="game.js"></script>
 </body>
