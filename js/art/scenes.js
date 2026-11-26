@@ -178,6 +178,9 @@ const ARENA = {
 
 export function drawBattleBG(g, w, h, theme, time) {
   const a = ARENA[theme] || ARENA.forest;
+  const compact = w < 780;
+  // Horizon must sit above the enemy row so both sides stand on the same floor.
+  const gy = h * (compact ? 0.42 : 0.52);
   const grd = g.createLinearGradient(0, 0, 0, h);
   grd.addColorStop(0, a.top);
   grd.addColorStop(0.55, a.mid);
@@ -226,32 +229,32 @@ export function drawBattleBG(g, w, h, theme, time) {
     for (let i = 0; i < 12; i++) {
       const bx = (i / 12) * w + (i % 2) * 20;
       const bh = 90 + (i % 4) * 30;
-      g.fillRect(bx + 12, h * 0.55 - bh, 8, bh);
-      g.beginPath(); g.arc(bx + 16, h * 0.55 - bh, 38, 0, Math.PI * 2); g.fill();
+      g.fillRect(bx + 12, gy - bh, 8, bh);
+      g.beginPath(); g.arc(bx + 16, gy - bh, 38, 0, Math.PI * 2); g.fill();
     }
   }
   if (a.kind === 'arches') {
+    const archY = gy - 14;
     g.strokeStyle = 'rgba(255,255,255,.055)'; g.lineWidth = 18;
     for (let i = 0; i < 4; i++) {
       const bx = w * 0.12 + i * w * 0.26;
-      g.beginPath(); g.arc(bx, h * 0.5, 70, Math.PI, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(bx, archY, 70, Math.PI, Math.PI * 2); g.stroke();
       g.fillStyle = 'rgba(255,255,255,.04)';
-      g.fillRect(bx - 80, h * 0.5, 18, h * 0.3);
-      g.fillRect(bx + 62, h * 0.5, 18, h * 0.3);
+      g.fillRect(bx - 80, archY, 18, gy - archY);
+      g.fillRect(bx + 62, archY, 18, gy - archY);
     }
   }
   if (a.kind === 'pillars' || a.kind === 'town') {
     for (let i = 0; i < 5; i++) {
       const bx = w * 0.06 + i * w * 0.21;
       g.fillStyle = 'rgba(255,255,255,.045)';
-      g.fillRect(bx, h * 0.18, w * 0.045, h * 0.5);
+      g.fillRect(bx, h * 0.18, w * 0.045, gy - h * 0.18);
       g.fillStyle = 'rgba(255,255,255,.07)';
       g.fillRect(bx - 6, h * 0.18, w * 0.045 + 12, 10);
     }
   }
 
   // ground
-  const gy = h * 0.68;
   const gg = g.createLinearGradient(0, gy, 0, h);
   gg.addColorStop(0, a.ground);
   gg.addColorStop(1, shade(a.ground, -0.4));

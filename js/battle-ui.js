@@ -64,13 +64,14 @@ export function layoutBattle(state) {
   const w = window.innerWidth, h = window.innerHeight;
   const compact = w < 780;
   const n = state.enemies.length;
-  const ex0 = compact ? w * 0.5 : w * 0.48;
-  const ex1 = compact ? w * 0.9 : w * 0.88;
-  const ey = compact ? h * 0.31 : h * 0.45;
+  const ex0 = compact ? w * 0.54 : w * 0.48;
+  const ex1 = compact ? w * 0.86 : w * 0.88;
+  const ey = compact ? h * 0.45 : h * 0.55;
   state.enemies.forEach((e, i) => {
     e.x = n === 1 ? (ex0 + ex1) * 0.5 : ex0 + (ex1 - ex0) * (i / (n - 1));
-    e.y = ey + (n > 1 ? (i % 2) * h * 0.025 : 0) + (compact ? 0 : h * 0.02);
-    e.scale = (e.scaleBase || 5) * (compact ? 0.72 : Math.min(1.15, Math.max(0.85, w / 1400)));
+    e.y = ey + (n > 1 ? (i % 2) * h * 0.022 : 0) + (compact ? 0 : h * 0.01);
+    const fit = compact ? 0.72 : Math.min(1.15, Math.max(0.85, w / 1400));
+    e.scale = Math.min(8.2, (e.scaleBase || 5) * fit * 1.3 * (e.size || 1));
   });
   const alive = state.allies.filter((m) => m.hp > 0);
   const px0 = compact ? w * 0.13 : w * 0.2;
@@ -171,18 +172,23 @@ export function commandMenu(state, actor) {
       { label: 'Fugir', icon: '➜', key: '5', value: 'flee', desc: state.canFlee ? 'Tente escapar da batalha.' : 'Não é possível fugir desta batalha.', disabled: !state.canFlee },
     ];
     root.classList.add('with-party');
-    root.innerHTML = `<div class="cmd-head"><span>${actor.name.toUpperCase()} · Nv ${actor.level}</span><span class="hint">Esc voltar</span></div>
+    root.innerHTML = `<div class="cmd-head"><span>${actor.name.toUpperCase()} · Nv ${actor.level}</span><span class="hint">Enter confirma · Esc volta</span></div>
       <div class="cmd-grid" id="cmd-grid"></div>
-      <div class="cmd-desc" id="cmd-desc"></div>`;
+      <div class="cmd-desc" id="cmd-desc"></div>
+      <div class="cmd-actions"><button class="battle-confirm" id="cmd-confirm">Confirmar <span>↵</span></button></div>`;
     const grid = el('#cmd-grid');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const render = () => {
+    const update = () => {
+      grid.querySelectorAll('.cmd-btn').forEach((b, i) => b.classList.toggle('sel', i === sel));
+      desc.innerHTML = `<b>${items[sel].label}</b> — ${items[sel].desc}`;
+    };
+    const build = () => {
       grid.innerHTML = items.map((it, i) => `<button class="cmd-btn ${i === sel ? 'sel' : ''}" data-i="${i}" ${it.disabled ? 'disabled' : ''}>
         <span>${it.icon}</span><span>${it.label}</span><span class="key">${it.key}</span></button>`).join('');
-      desc.innerHTML = `<b>${items[sel].label}</b> — ${items[sel].desc}`;
       grid.querySelectorAll('.cmd-btn').forEach((b, i) => {
-        b.addEventListener('mouseenter', () => { if (!items[i].disabled) { sel = i; render(); audio.sfx('cursor'); } });
+        // Update in place: rebuilding on hover detaches the node mid-click.
+        b.addEventListener('mouseenter', () => { if (!items[i].disabled) { sel = i; update(); audio.sfx('cursor'); } });
         b.addEventListener('click', () => { if (!items[i].disabled) choose(i); });
       });
     };
@@ -194,16 +200,17 @@ export function commandMenu(state, actor) {
       finishMenu(handler, resolve, items[i].value);
     };
     const handler = (a) => {
-      if (a === 'left') { sel = (sel + items.length - 1) % items.length; render(); return true; }
-      if (a === 'right') { sel = (sel + 1) % items.length; render(); return true; }
-      if (a === 'up') { sel = (sel + items.length - 2) % items.length; render(); return true; }
-      if (a === 'down') { sel = (sel + 2) % items.length; render(); return true; }
+      if (a === 'left') { sel = (sel + items.length - 1) % items.length; update(); return true; }
+      if (a === 'right') { sel = (sel + 1) % items.length; update(); return true; }
+      if (a === 'up') { sel = (sel + items.length - 2) % items.length; update(); return true; }
+      if (a === 'down') { sel = (sel + 2) % items.length; update(); return true; }
       if (a === 'confirm') { choose(sel); return true; }
       if (a === 'cancel') { return true; }
       return true;
     };
     Input.push(handler);
-    render();
+    build();
+    el('#cmd-confirm').addEventListener('click', () => choose(sel));
   });
 }
 
@@ -213,18 +220,22 @@ export function skillMenu(state, actor) {
     const skills = actor.skills.map((sid) => ({ sid, sk: SKILLS[sid] })).filter((s) => s.sk);
     root.innerHTML = `<div class="cmd-head"><span>HABILIDADES · ${actor.name.toUpperCase()}</span><span class="hint">MP ${actor.mp}/${actor.maxMp}</span></div>
       <div class="skill-list" id="skill-list"></div>
-      <div class="cmd-desc" id="cmd-desc"></div>`;
+      <div class="cmd-desc" id="cmd-desc"></div>
+      <div class="cmd-actions"><button class="battle-confirm" id="skill-confirm">Confirmar <span>↵</span></button><button class="battle-back" id="skill-back">Voltar</button></div>`;
     const list = el('#skill-list');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const render = () => {
+    const update = () => {
+      list.querySelectorAll('.skill-row').forEach((row, i) => row.classList.toggle('sel', i === sel));
+      const cur = skills[sel];
+      desc.innerHTML = cur ? `<b>${cur.sk.name}</b> — ${cur.sk.desc}` : 'Retornar às ações.';
+    };
+    const build = () => {
       list.innerHTML = skills.map((s, i) => `<div class="skill-row ${i === sel ? 'sel' : ''} ${actor.mp < s.sk.cost ? 'disabled' : ''}" data-i="${i}">
         <span>${s.sk.name}</span><span class="cost">${s.sk.cost} MP</span></div>`).join('') +
         `<div class="skill-row ${sel === skills.length ? 'sel' : ''}" data-i="${skills.length}"><span>Voltar</span><span class="cost">—</span></div>`;
-      const cur = skills[sel];
-      desc.innerHTML = cur ? `<b>${cur.sk.name}</b> — ${cur.sk.desc}` : 'Retornar às ações.';
       list.querySelectorAll('.skill-row').forEach((row, i) => {
-        row.addEventListener('mouseenter', () => { sel = i; render(); });
+        row.addEventListener('mouseenter', () => { sel = i; update(); });
         row.addEventListener('click', () => choose(i));
       });
     };
@@ -235,14 +246,16 @@ export function skillMenu(state, actor) {
       finishMenu(handler, resolve, skills[i].sid);
     };
     const handler = (a) => {
-      if (a === 'up') { sel = (sel - 1 + skills.length + 1) % (skills.length + 1); render(); return true; }
-      if (a === 'down') { sel = (sel + 1) % (skills.length + 1); render(); return true; }
+      if (a === 'up') { sel = (sel - 1 + skills.length + 1) % (skills.length + 1); update(); return true; }
+      if (a === 'down') { sel = (sel + 1) % (skills.length + 1); update(); return true; }
       if (a === 'confirm') { choose(sel); return true; }
       if (a === 'cancel') { finishMenu(handler, resolve, null); return true; }
       return true;
     };
     Input.push(handler);
-    render();
+    build();
+    el('#skill-confirm').addEventListener('click', () => choose(sel));
+    el('#skill-back').addEventListener('click', () => choose(skills.length));
   });
 }
 
@@ -250,20 +263,24 @@ export function itemMenu(state, game) {
   return new Promise((resolve) => {
     const root = state.ui.command;
     const ids = Object.keys(game.inventory).filter((id) => ITEMS[id] && !ITEMS[id].key && game.inventory[id] > 0);
-    root.innerHTML = `<div class="cmd-head"><span>ITENS</span><span class="hint">Esc voltar</span></div>
-      <div class="skill-list" id="item-list"></div><div class="cmd-desc" id="cmd-desc"></div>`;
+    root.innerHTML = `<div class="cmd-head"><span>ITENS</span><span class="hint">Enter confirma · Esc volta</span></div>
+      <div class="skill-list" id="item-list"></div><div class="cmd-desc" id="cmd-desc"></div>
+      <div class="cmd-actions"><button class="battle-confirm" id="item-confirm">Confirmar <span>↵</span></button><button class="battle-back" id="item-back">Voltar</button></div>`;
     const list = el('#item-list');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const render = () => {
+    const update = () => {
+      list.querySelectorAll('.skill-row').forEach((row, i) => row.classList.toggle('sel', i === sel));
+      const cur = ids[sel];
+      desc.innerHTML = cur ? ITEMS[cur].desc : 'Retornar às ações.';
+    };
+    const build = () => {
       list.innerHTML = ids.length ? ids.map((id, i) => `<div class="skill-row ${i === sel ? 'sel' : ''}" data-i="${i}">
         <span>${ITEMS[id].icon} ${ITEMS[id].name} <span style="color:var(--muted);font-size:14px">x${game.inventory[id]}</span></span><span class="cost">—</span></div>`).join('') +
         `<div class="skill-row ${sel === ids.length ? 'sel' : ''}" data-i="${ids.length}"><span>Voltar</span><span class="cost">—</span></div>`
         : `<div class="skill-row sel"><span>Mochila vazia</span></div><div class="skill-row" data-i="0"><span>Voltar</span></div>`;
-      const cur = ids[sel];
-      desc.innerHTML = cur ? ITEMS[cur].desc : 'Retornar às ações.';
       list.querySelectorAll('.skill-row').forEach((row, i) => {
-        row.addEventListener('mouseenter', () => { sel = i; render(); });
+        row.addEventListener('mouseenter', () => { sel = i; update(); });
         row.addEventListener('click', () => choose(i));
       });
     };
@@ -273,14 +290,16 @@ export function itemMenu(state, game) {
       finishMenu(handler, resolve, ids[i]);
     };
     const handler = (a) => {
-      if (a === 'up') { sel = (sel - 1 + ids.length + 1) % (ids.length + 1); render(); return true; }
-      if (a === 'down') { sel = (sel + 1) % (ids.length + 1); render(); return true; }
+      if (a === 'up') { sel = (sel - 1 + ids.length + 1) % (ids.length + 1); update(); return true; }
+      if (a === 'down') { sel = (sel + 1) % (ids.length + 1); update(); return true; }
       if (a === 'confirm') { choose(sel); return true; }
       if (a === 'cancel') { finishMenu(handler, resolve, null); return true; }
       return true;
     };
     Input.push(handler);
-    render();
+    build();
+    el('#item-confirm').addEventListener('click', () => choose(sel));
+    el('#item-back').addEventListener('click', () => choose(ids.length));
   });
 }
 
@@ -291,18 +310,30 @@ export function targetMenu(state, opts = {}) {
     const layer = state.ui.target;
     if (!list.length) { resolve(null); return; }
     let sel = 0;
-    const render = () => {
-      layer.innerHTML = `<div class="target-layer">${list.map((a, i) => `
-        <button class="target-card ${i === sel ? 'sel' : ''}" data-i="${i}">
-          <div class="tc-name">${a.name}</div>
-          <div class="tc-sub">${side === 'enemy' ? (a.hp > 0 ? 'Vivo' : 'Caído') : `${a.hp}/${a.maxHp} HP`}</div>
-          ${side === 'enemy' ? `<div class="bar hp"><i style="width:${clamp(a.hp / a.maxHp, 0, 1) * 100}%"></i></div>` : ''}
-        </button>`).join('')}</div>`;
+    const update = () => {
+      layer.querySelectorAll('.target-card').forEach((b, i) => b.classList.toggle('sel', i === sel));
+      state.hoverTarget = list[sel];
+    };
+    const build = () => {
+      layer.innerHTML = `<div class="target-layer">
+        <div class="target-cards">${list.map((a, i) => `
+          <button class="target-card ${i === sel ? 'sel' : ''}" data-i="${i}">
+            <div class="tc-name">${a.name}</div>
+            <div class="tc-sub">${side === 'enemy' ? (a.hp > 0 ? 'Vivo' : 'Caído') : `${a.hp}/${a.maxHp} HP`}</div>
+            ${side === 'enemy' ? `<div class="bar hp"><i style="width:${clamp(a.hp / a.maxHp, 0, 1) * 100}%"></i></div>` : ''}
+          </button>`).join('')}</div>
+        <div class="target-actions">
+          <button class="battle-confirm" id="target-confirm">Confirmar <span>↵</span></button>
+          <button class="battle-back" id="target-back">Voltar</button>
+        </div>
+      </div>`;
       layer.querySelectorAll('.target-card').forEach((b, i) => {
-        b.addEventListener('mouseenter', () => { sel = i; state.hoverTarget = list[i]; render(); });
+        b.addEventListener('mouseenter', () => { sel = i; update(); });
         b.addEventListener('click', () => choose(i));
       });
-      state.hoverTarget = list[sel];
+      el('#target-confirm').addEventListener('click', () => choose(sel));
+      el('#target-back').addEventListener('click', cancel);
+      update();
     };
     const choose = (i) => {
       if (!list[i]) return;
@@ -312,15 +343,20 @@ export function targetMenu(state, opts = {}) {
       layer.innerHTML = '';
       finishMenu(handler, resolve, list[i]);
     };
+    const cancel = () => {
+      state.hoverTarget = null;
+      layer.innerHTML = '';
+      finishMenu(handler, resolve, null);
+    };
     const handler = (a) => {
-      if (a === 'left' || a === 'up') { sel = (sel - 1 + list.length) % list.length; render(); return true; }
-      if (a === 'right' || a === 'down') { sel = (sel + 1) % list.length; render(); return true; }
+      if (a === 'left' || a === 'up') { sel = (sel - 1 + list.length) % list.length; update(); return true; }
+      if (a === 'right' || a === 'down') { sel = (sel + 1) % list.length; update(); return true; }
       if (a === 'confirm') { choose(sel); return true; }
-      if (a === 'cancel') { state.hoverTarget = null; layer.innerHTML = ''; finishMenu(handler, resolve, null); return true; }
+      if (a === 'cancel') { cancel(); return true; }
       return true;
     };
     Input.push(handler);
-    render();
+    build();
   });
 }
 
@@ -404,9 +440,9 @@ export function drawBattleFrame(state, now) {
       continue;
     }
     drawEnemy(g, e.id, e.x + dx, e.y, e.scale, state.time, { flash: e.flashT > 0, phase: e.bobPhase });
-    // HP bar
-    const bw = clamp(e.scale * 26, 64, 170);
-    const bx = e.x - bw / 2, by = e.y - (e.scale * 48) - 18;
+    // HP bar (visual height is normalized to scale * 28)
+    const bw = clamp(e.scale * 24, 64, 170);
+    const bx = e.x - bw / 2, by = e.y - (e.scale * 28) - 18;
     g.fillStyle = 'rgba(4,7,14,.8)';
     g.fillRect(bx - 2, by - 2, bw + 4, 14);
     g.fillStyle = '#3a1520'; g.fillRect(bx, by, bw, 6);
@@ -438,7 +474,7 @@ export function drawBattleFrame(state, now) {
 }
 
 export function battleActorPos(actor) {
-  if (actor.isEnemy) return { x: actor.x, y: actor.y - actor.scale * 28, h: actor.scale * 48 };
+  if (actor.isEnemy) return { x: actor.x, y: actor.y - actor.scale * 14, h: actor.scale * 28 };
   return { x: actor.bx, y: actor.by - actor.bs * 14, h: actor.bs * 28 };
 }
 

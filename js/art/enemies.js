@@ -325,18 +325,19 @@ function getSil(id) {
   return c;
 }
 
-// x,y = feet center. Humanoid ids are drawn from character sheets for crispness.
+// x,y = feet center. `scale` is normalized to a 28px reference height so
+// humanoids and monsters keep the same visual weight in battle.
 export function drawEnemy(g, id, x, y, scale = 6, time = 0, opts = {}) {
   const humanoids = { bandit:1, guard:1, jailer:1, champion:1, darkknight:1, dorian:1 };
-  const bob = opts.bob === false ? 0 : Math.sin(time * 2 + (opts.phase || 0)) * scale * 0.35;
+  const bob = opts.bob === false ? 0 : Math.sin(time * 2 + (opts.phase || 0)) * scale * 0.3;
   if (humanoids[id]) {
     const map = { bandit:'bandit', guard:'guard', jailer:'jailer', champion:'champion', darkknight:'darkknight', dorian:'dorian' };
-    const cs = Math.round(scale * 1.35);
-    drawCharacter(g, map[id], x, y + bob, 'right', 0, cs, opts);
+    drawCharacter(g, map[id], x, y + bob, 'right', 0, Math.round(scale), opts);
     return;
   }
   const spr = opts.flash ? getSil(id) : getEnemySprite(id);
-  const w = W * scale, h = H * scale;
+  const s = scale * 28 / H;
+  const w = W * s, h = H * s;
   const dx = Math.round(x - w / 2), dy = Math.round(y - h + bob);
   if (opts.alpha != null) g.globalAlpha = opts.alpha;
   g.drawImage(spr, dx, dy, w, h);

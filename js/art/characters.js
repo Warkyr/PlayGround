@@ -143,9 +143,11 @@ function drawWeapon(g, d, facing) {
 
 function drawHuman(g, d, facing, frame) {
   const o = '#17121a';
-  const walk = frame === 1 || frame === 2;
-  const step = frame === 1 ? 1 : frame === 2 ? -1 : 0;
-  const bob = walk ? 1 : 0;
+  // 0 = idle, 1 = left foot forward, 2 = passing pose, 3 = right foot forward.
+  const phase = ((frame % 4) + 4) % 4;
+  const step = phase === 1 ? 1 : phase === 3 ? -1 : 0;
+  const bob = phase === 2 ? 1 : 0;
+  const armSwing = phase === 1 ? 1 : phase === 3 ? -1 : 0;
   const top = 10 - bob;
 
   // ground shadow
@@ -173,13 +175,15 @@ function drawHuman(g, d, facing, frame) {
     px(g, d.top2, 5, top + 6, 10, 4);
     px(g, d.trim, 5, top + 7, 10, 1);
     px(g, d.top2, 5, top, 3, 7);
-    // arms
-    px(g, o, 2, top + 1, 3, 8);
-    px(g, o, 15, top + 1, 3, 8);
-    px(g, d.top2, 3, top + 2, 2, 6);
-    px(g, d.top2, 15, top + 2, 2, 6);
-    px(g, d.skin, 3, top + 8, 2, 2);
-    px(g, d.skin, 15, top + 8, 2, 2);
+    // arms (opposite swing keeps the walk readable from above)
+    const aL = top + 1 + armSwing;
+    const aR = top + 1 - armSwing;
+    px(g, o, 2, aL, 3, 8);
+    px(g, o, 15, aR, 3, 8);
+    px(g, d.top2, 3, aL + 1, 2, 6);
+    px(g, d.top2, 15, aR + 1, 2, 6);
+    px(g, d.skin, 3, aL + 7, 2, 2);
+    px(g, d.skin, 15, aR + 7, 2, 2);
     // head
     px(g, o, 5, 2, 10, 10);
     px(g, d.skin, 6, 3, 8, 8);
@@ -196,8 +200,9 @@ function drawHuman(g, d, facing, frame) {
       px(g, d.cape, 4, top, 5, 2);
     }
     // back arm
-    px(g, o, 5, top + 2, 3, 7);
-    px(g, d.top2, 5, top + 3, 2, 5);
+    const backArmY = top + 2 - armSwing;
+    px(g, o, 5, backArmY, 3, 7);
+    px(g, d.top2, 5, backArmY + 1, 2, 5);
     // legs
     const l1 = 20 - bob - (step > 0 ? 1 : 0), l2 = 20 - bob - (step < 0 ? 1 : 0);
     px(g, o, 6, l1, 4, 7);
@@ -213,9 +218,10 @@ function drawHuman(g, d, facing, frame) {
     px(g, d.trim, 6, top + 7, 8, 1);
     if (d.skirt) { px(g, o, 4, top + 8, 12, 6); px(g, d.skirt, 5, top + 8, 10, 5); }
     // front arm
-    px(g, o, 12, top + 2, 3, 8);
-    px(g, d.top, 12, top + 2, 2, 5);
-    px(g, d.skin, 12, top + 7, 2, 3);
+    const frontArmY = top + 2 + armSwing;
+    px(g, o, 12, frontArmY, 3, 8);
+    px(g, d.top, 12, frontArmY, 2, 5);
+    px(g, d.skin, 12, frontArmY + 5, 2, 3);
     // head
     px(g, o, 6, 2, 9, 10);
     px(g, d.skin, 7, 3, 7, 8);
@@ -245,10 +251,12 @@ function drawHuman(g, d, facing, frame) {
   px(g, d.boots, 6, l1 + 5, 3, 2);
   px(g, d.boots, 12, l2 + 5, 3, 2);
   // arms behind
-  px(g, o, 2, top + 1, 3, 8);
-  px(g, o, 15, top + 1, 3, 8);
-  px(g, d.top2, 3, top + 2, 2, 5);
-  px(g, d.top2, 15, top + 2, 2, 5);
+  const aL = top + 1 + armSwing;
+  const aR = top + 1 - armSwing;
+  px(g, o, 2, aL, 3, 8);
+  px(g, o, 15, aR, 3, 8);
+  px(g, d.top2, 3, aL + 1, 2, 5);
+  px(g, d.top2, 15, aR + 1, 2, 5);
   // body
   px(g, o, 4, top - 1, 12, 11);
   px(g, d.top, 5, top, 10, 10);
@@ -259,8 +267,8 @@ function drawHuman(g, d, facing, frame) {
   px(g, d.trim, 9, top + 7, 2, 2);
   if (d.skirt) { px(g, o, 4, top + 8, 12, 7); px(g, d.skirt, 5, top + 8, 10, 6); px(g, d.top2, 5, top + 12, 10, 2); }
   // hands
-  px(g, d.skin, 3, top + 8, 2, 2);
-  px(g, d.skin, 15, top + 8, 2, 2);
+  px(g, d.skin, 3, aL + 7, 2, 2);
+  px(g, d.skin, 15, aR + 7, 2, 2);
   // head
   px(g, o, 5, 2, 10, 10);
   px(g, d.skin, 6, 3, 8, 8);
