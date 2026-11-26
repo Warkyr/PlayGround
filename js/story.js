@@ -138,6 +138,43 @@ const SCRIPTS = {
     await ctx.shop(['potion', 'potion2', 'ether', 'antidote', 'bomb', 'smoke'], 'Tolan · Mercador');
   },
 
+  async blacksmith_village(g, ctx) {
+    if (!g.flags.metBlacksmith) {
+      set(g, 'metBlacksmith');
+      await lines([
+        ['Haldor', 'Kael. Ainda usando a espada do seu pai? Ela já viu mais lenha do que aço.'],
+        ['Kael', 'Ela nunca reclamou.'],
+        ['Haldor', 'Armas boas não reclamam. Elas só duram. Deixe-me mostrar o que saiu da forja.'],
+      ]);
+    } else {
+      await lines([
+        ['Haldor', 'A bigorna está quente. Se o ouro estiver frio, volte depois.'],
+      ]);
+    }
+    await ctx.weaponShop(['ironSword', 'steelSword'], 'Haldor · Ferreiro');
+  },
+
+  async blacksmith_night(g, ctx) {
+    if (!g.flags.metAnka) {
+      set(g, 'metAnka');
+      await lines([
+        ['Ferreira Anka', 'Então vocês são os loucos que vão enfrentar Dorian.'],
+        ['Garrick', 'Loucos ou desesperados. A diferença é o aço.'],
+        ['Ferreira Anka', 'Então escolham bem. O que tenho aqui foi feito para durar uma revolução.'],
+      ]);
+    } else {
+      await lines([
+        ['Ferreira Anka', 'A forja não dorme. Nem a resistência.'],
+      ]);
+    }
+    await ctx.weaponShop([
+      'steelSword', 'dawnblade',
+      'steelGreatsword', 'bulwark',
+      'crystalStaff', 'auroraStaff',
+      'blessedStaff', 'dawnStaff',
+    ], 'Ferreira Anka · Forja da Resistência');
+  },
+
   async child_village(g, ctx) {
     await lines([
       ['Pip', 'Kael! Kael! Você vai casar com a Lyra?'],

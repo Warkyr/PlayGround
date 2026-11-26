@@ -10,8 +10,9 @@ import {
 } from './art.js';
 import {
   CHAPTERS, ITEMS, ENCOUNTERS, makeMember, levelUpMember, getMap, MAPS,
+  normalizeWeapon,
 } from './data.js';
-import { pauseMenu, shopMenu } from './ui-menus.js';
+import { pauseMenu, shopMenu, weaponShopMenu } from './ui-menus.js';
 import { startBattle, getActiveBattle } from './battle.js';
 import { drawBattleFrame } from './battle-ui.js';
 import { runScript, hasScript, TITLE_EXIT } from './story.js';
@@ -85,6 +86,7 @@ function newGame() {
     party: [makeMember('kael', 1)],
     gold: 45,
     inventory: { potion: 3, ether: 1 },
+    weapons: { trainingSword: true },
     chapter: 0,
     chapterLabel: 'Capítulo I',
     quest: 'Encontre Lyra no centro da vila.',
@@ -114,6 +116,7 @@ function loadGame(save) {
     chests: save.chests || {},
     seen: save.seen || {},
     inventory: save.inventory || {},
+    weapons: save.weapons || {},
     journal: save.journal || [],
     party: save.party,
     chapter: save.chapter || 0,
@@ -130,6 +133,8 @@ function loadGame(save) {
     m.hp = clamp(Number(m.hp) || 0, 0, m.maxHp);
     m.mp = clamp(Number(m.mp) || 0, 0, m.maxMp);
     if (!m.skills) m.skills = [];
+    normalizeWeapon(m);
+    if (m.weapon) game.weapons[m.weapon] = true;
   }
   const map = getMap(save.mapId) || MAPS.village;
   const p = save.player || {};
@@ -151,6 +156,7 @@ function saveGame(silent = true) {
     party: game.party,
     gold: game.gold,
     inventory: game.inventory,
+    weapons: game.weapons || {},
     chapter: game.chapter,
     quest: game.quest,
     journal: game.journal,
@@ -368,6 +374,7 @@ const storyCtx = {
     const m = makeMember(id, level);
     m.hp = m.maxHp;
     m.mp = m.maxMp;
+    if (m.weapon) game.weapons[m.weapon] = true;
     game.party.push(m);
     ui.updateHUD(game);
     ui.toast(`${m.name} entrou no grupo!`, 'gold', '✦');
@@ -396,6 +403,7 @@ const storyCtx = {
     ui.updateHUD(game);
   },
   async shop(stock, title) { await openShop(stock, title); },
+  async weaponShop(stock, title) { await openWeaponShop(stock, title); },
   async goto(id, x, y, dir, opts) { await gotoMap(id, x, y, dir, opts); },
   async battle(ids, opts) { return await runBattle(ids, opts); },
   async modal(opts) { return await ui.modal(opts); },
@@ -480,6 +488,17 @@ async function openShop(stock, title) {
     await shopMenu(game, stock, title);
   } finally {
     unblock('shop');
+    ui.updateHUD(game);
+  }
+}
+
+async function openWeaponShop(stock, title) {
+  if (mode !== 'explore' || isBusy()) return;
+  block('weapon-shop');
+  try {
+    await weaponShopMenu(game, stock, title);
+  } finally {
+    unblock('weapon-shop');
     ui.updateHUD(game);
   }
 }
@@ -727,6 +746,12 @@ async function boot() {
   ui.init();
   ui.updateMuteIcon(audio.muted);
   Input.exploreAction = exploreAction;
+  // The HUD button is a real control, not decoration: without this listener
+  // the pause menu only opened with Esc/X.
+  document.getElementById('hud-menu')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openPause();
+  });
 
   const unlock = () => {
     audio.unlock();

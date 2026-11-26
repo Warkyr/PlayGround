@@ -119,6 +119,99 @@ export const ITEMS = {
   cellkey: { name: 'Chave da Cela', icon: '⚿', desc: 'Ferro enferrujado. Abre o que o abismo trancou.', key: true },
 };
 
+// Weapons are kept separate from consumables: they are bought at the smith,
+// auto-equipped to their owner and never appear in the battle item menu.
+export const WEAPONS = {
+  trainingSword: { name: 'Espada de Treino', icon: '†', user: 'kael', price: 0, atk: 0,
+    desc: 'A velha espada de lenhador. Gasta, mas ainda corta.' },
+  ironSword: { name: 'Espada de Ferro', icon: '†', user: 'kael', price: 80, atk: 3,
+    desc: 'Aço simples, bem temperado. +3 ATQ.' },
+  steelSword: { name: 'Lâmina de Aço', icon: '†', user: 'kael', price: 220, atk: 6,
+    desc: 'Forjada para durar mais que o ódio. +6 ATQ.' },
+  dawnblade: { name: 'Gume da Aurora', icon: '✦', user: 'kael', price: 480, atk: 9, res: 3,
+    desc: 'A primeira luz do amanhecer presa no fio. +9 ATQ, +3 RES.' },
+
+  oldGreatsword: { name: 'Montante Velho', icon: '†', user: 'garrick', price: 0, atk: 0, def: 0,
+    desc: 'Pesado, marcado por batalhas. Ainda digno de um cavaleiro.' },
+  ironGreatsword: { name: 'Montante de Ferro', icon: '‡', user: 'garrick', price: 100, atk: 2, def: 2,
+    desc: 'Um muro de aço com fio. +2 ATQ, +2 DEF.' },
+  steelGreatsword: { name: 'Montante de Aço', icon: '‡', user: 'garrick', price: 240, atk: 4, def: 4,
+    desc: 'Feito para proteger quem está atrás. +4 ATQ, +4 DEF.' },
+  bulwark: { name: 'Baluarte de Ferro', icon: '◆', user: 'garrick', price: 500, atk: 6, def: 7,
+    desc: 'A última parede entre a aurora e a escuridão. +6 ATQ, +7 DEF.' },
+
+  apprenticeStaff: { name: 'Cajado de Aprendiz', icon: '†', user: 'mira', price: 0, mag: 0,
+    desc: 'Madeira torta, mas o cristal ainda responde.' },
+  runedStaff: { name: 'Cajado Rúnico', icon: '✦', user: 'mira', price: 90, mag: 3, res: 1,
+    desc: 'Runas antigas canalizam melhor a magia. +3 MAG, +1 RES.' },
+  crystalStaff: { name: 'Cajado de Cristal', icon: '✦', user: 'mira', price: 230, mag: 5, res: 3,
+    desc: 'O cristal canta quando a magia passa. +5 MAG, +3 RES.' },
+  auroraStaff: { name: 'Cajado da Aurora', icon: '✧', user: 'mira', price: 480, mag: 8, res: 5,
+    desc: 'Um fio de luz do amanhecer dentro da pedra. +8 MAG, +5 RES.' },
+
+  noviceStaff: { name: 'Cajado de Noviça', icon: '†', user: 'lyra', price: 0, mag: 0, res: 0,
+    desc: 'Simples, gasto pelo uso. A fé faz o resto.' },
+  pilgrimStaff: { name: 'Cajado de Peregrina', icon: '✦', user: 'lyra', price: 95, mag: 3, res: 2,
+    desc: 'Carregado por estradas longas e preces silenciosas. +3 MAG, +2 RES.' },
+  blessedStaff: { name: 'Cajado Abençoado', icon: '✦', user: 'lyra', price: 240, mag: 5, res: 4,
+    desc: 'Cada entalhe guarda uma bênção. +5 MAG, +4 RES.' },
+  dawnStaff: { name: 'Cajado do Amanhecer', icon: '✧', user: 'lyra', price: 500, mag: 8, res: 6,
+    desc: 'Aurora e oração na mesma haste. +8 MAG, +6 RES.' },
+};
+
+export const DEFAULT_WEAPONS = {
+  kael: 'trainingSword',
+  garrick: 'oldGreatsword',
+  mira: 'apprenticeStaff',
+  lyra: 'noviceStaff',
+};
+
+export function weaponBonusText(w) {
+  if (!w) return 'Sem arma';
+  const parts = [];
+  if (w.atk) parts.push(`+${w.atk} ATQ`);
+  if (w.mag) parts.push(`+${w.mag} MAG`);
+  if (w.def) parts.push(`+${w.def} DEF`);
+  if (w.res) parts.push(`+${w.res} RES`);
+  return parts.length ? parts.join(' · ') : 'Sem bônus';
+}
+
+function ensureBaseStats(m) {
+  if (Number.isFinite(m.baseAtk)) return;
+  const s = statsFor(m.id, m.level || 1);
+  m.baseAtk = s.atk;
+  m.baseMag = s.mag;
+  m.baseDef = s.def;
+  m.baseRes = s.res;
+}
+
+export function applyWeapon(m) {
+  ensureBaseStats(m);
+  const w = WEAPONS[m.weapon];
+  m.atk = m.baseAtk + (w?.atk || 0);
+  m.mag = m.baseMag + (w?.mag || 0);
+  m.def = m.baseDef + (w?.def || 0);
+  m.res = m.baseRes + (w?.res || 0);
+  return w;
+}
+
+export function equipWeapon(m, id) {
+  const w = WEAPONS[id];
+  if (!m || !w || w.user !== m.id) return false;
+  m.weapon = id;
+  applyWeapon(m);
+  return true;
+}
+
+export function normalizeWeapon(m) {
+  if (!m) return null;
+  if (!m.weapon || !WEAPONS[m.weapon] || WEAPONS[m.weapon].user !== m.id) {
+    m.weapon = DEFAULT_WEAPONS[m.id] || null;
+  }
+  applyWeapon(m);
+  return m.weapon;
+}
+
 export const ENEMIES = {
   wolf: { name: 'Lobo Cinzento', sprite: 'wolf', hp: 55, mp: 0, atk: 12, def: 6, mag: 3, res: 4, spd: 11, lck: 4,
     xp: 22, gold: 10, weak: ['fire'], resist: [], skills: ['mordida'], scale: 4.6, accent: '#9a9aa8' },
@@ -173,13 +266,17 @@ export function statsFor(id, level) {
 export function makeMember(id, level) {
   const c = CHARACTERS[id];
   const stats = statsFor(id, level);
-  return {
+  const member = {
     id, name: c.name, role: c.role, sprite: c.sprite, accent: c.accent,
     level, xp: 0, hp: stats.hp, mp: stats.mp, maxHp: stats.hp, maxMp: stats.mp,
     atk: stats.atk, def: stats.def, mag: stats.mag, res: stats.res, spd: stats.spd, lck: stats.lck,
+    baseAtk: stats.atk, baseDef: stats.def, baseMag: stats.mag, baseRes: stats.res,
+    weapon: DEFAULT_WEAPONS[id] || null,
     skills: c.skills.filter(([, lv]) => lv <= level).map(([sid]) => sid),
     status: {}, buffs: [], defending: false,
   };
+  applyWeapon(member);
+  return member;
 }
 
 export function levelUpMember(m, levels = 1) {
@@ -191,7 +288,9 @@ export function levelUpMember(m, levels = 1) {
     const diff = {};
     for (const k of Object.keys(after)) diff[k] = after[k] - before[k];
     m.maxHp = after.hp; m.maxMp = after.mp;
-    m.atk = after.atk; m.def = after.def; m.mag = after.mag; m.res = after.res; m.spd = after.spd; m.lck = after.lck;
+    m.baseAtk = after.atk; m.baseDef = after.def; m.baseMag = after.mag; m.baseRes = after.res;
+    m.spd = after.spd; m.lck = after.lck;
+    applyWeapon(m);
     m.hp = Math.min(m.maxHp, m.hp + diff.hp);
     m.mp = Math.min(m.maxMp, m.mp + diff.mp);
     const newSkills = CHARACTERS[m.id].skills.filter(([sid, lv]) => lv === m.level && !m.skills.includes(sid)).map(([sid]) => sid);
