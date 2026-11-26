@@ -2,7 +2,7 @@
 import { Input, wait, clamp, rand, randInt, chance } from './util.js';
 import { audio } from './audio.js';
 import { ui } from './ui.js';
-import { drawBattleBG, drawEnemy, drawCharacter, getPortrait, getEnemyThumb, FX } from './art.js';
+import { drawBattleBG, drawEnemy, drawCharacter, getPortrait, getEnemyThumb, FX, enemySpriteMetrics } from './art.js';
 import { SKILLS, ITEMS, STATUS_INFO, ELEMENTS } from './data.js';
 
 const el = (sel) => document.querySelector(sel);
@@ -61,18 +61,57 @@ export function logMsg(state, text) {
 }
 
 export function layoutBattle(state) {
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = state.w || window.innerWidth;
+  const h = state.h || window.innerHeight;
   const compact = w < 780;
+  const portrait = h > w * 1.15;
   const n = state.enemies.length;
-  const ex0 = compact ? w * 0.54 : w * 0.48;
-  const ex1 = compact ? w * 0.86 : w * 0.88;
-  const ey = compact ? h * 0.45 : h * 0.55;
+  // Enemy ground line sits farther back than the party, but never so high that
+  // sprites collide with the battle log / turn order.
+  const groundY = portrait ? h * 0.36 : compact ? h * 0.48 : h * 0.56;
+  const topLimit = portrait ? 112 : compact ? 88 : 108;
+  const x0 = portrait ? w * 0.36 : compact ? w * 0.54 : w * 0.52;
+  const x1 = portrait ? w * 0.96 : w * 0.92;
+
+  // 1) Choose a target height in screen terms (bosses slightly larger).
+  // 2) Fit the whole group into the available width, shrinking if necessary.
+  // 3) Anchor every enemy at a shared ground line so they feel grounded.
+  const metrics = state.enemies.map((e) => enemySpriteMetrics(e.id));
+  const gap = n > 1 ? Math.min(26, (x1 - x0) * 0.045) : 0;
   state.enemies.forEach((e, i) => {
-    e.x = n === 1 ? (ex0 + ex1) * 0.5 : ex0 + (ex1 - ex0) * (i / (n - 1));
-    e.y = ey + (n > 1 ? (i % 2) * h * 0.022 : 0) + (compact ? 0 : h * 0.01);
-    const fit = compact ? 0.72 : Math.min(1.15, Math.max(0.85, w / 1400));
-    e.scale = Math.min(8.2, (e.scaleBase || 5) * fit * 1.3 * (e.size || 1));
+    const boss = !!e.boss;
+    const targetH = clamp(
+      h * (boss ? (portrait ? 0.24 : 0.28) : (portrait ? 0.155 : 0.20)),
+      compact ? 56 : 80,
+      boss ? 250 : 185,
+    );
+    const maxH = groundY - topLimit;
+    const height = Math.max(40, Math.min(targetH, maxH));
+    e.scale = height / metrics[i].h;
   });
+  let totalW = 0;
+  state.enemies.forEach((e, i) => {
+    e.drawW = metrics[i].w * e.scale;
+    e.drawH = metrics[i].h * e.scale;
+    totalW += e.drawW + (i ? gap : 0);
+  });
+  const availW = x1 - x0;
+  if (totalW > availW && totalW > 0) {
+    const shrink = availW / totalW;
+    state.enemies.forEach((e, i) => {
+      e.scale *= shrink;
+      e.drawW *= shrink;
+      e.drawH *= shrink;
+    });
+    totalW = availW;
+  }
+  let cursor = (x0 + x1) / 2 - totalW / 2;
+  state.enemies.forEach((e, i) => {
+    e.x = cursor + e.drawW / 2;
+    cursor += e.drawW + gap;
+    e.y = groundY + (n > 1 && !portrait ? (i % 2) * h * 0.012 : 0);
+  });
+
   const alive = state.allies.filter((m) => m.hp > 0);
   const px0 = compact ? w * 0.13 : w * 0.2;
   const px1 = compact ? w * 0.43 : w * 0.43;
@@ -157,6 +196,11 @@ export function statusPips(actor) {
 
 // ---------------- Menus ----------------
 function finishMenu(handler, resolve, value) {
+  // Resolve only once and always remove this menu's keyboard handler.
+  // In nested menus (item -> ally target), stale handlers could advance
+  // or cancel the wrong action on the next key press.
+  if (handler.__battleMenuFinished) return;
+  handler.__battleMenuFinished = true;
   Input.pop(handler);
   resolve(value);
 }
@@ -172,45 +216,47 @@ export function commandMenu(state, actor) {
       { label: 'Fugir', icon: '➜', key: '5', value: 'flee', desc: state.canFlee ? 'Tente escapar da batalha.' : 'Não é possível fugir desta batalha.', disabled: !state.canFlee },
     ];
     root.classList.add('with-party');
-    root.innerHTML = `<div class="cmd-head"><span>${actor.name.toUpperCase()} · Nv ${actor.level}</span><span class="hint">Enter confirma · Esc volta</span></div>
+    root.innerHTML = `<div class="cmd-head"><span>${actor.name.toUpperCase()} · Nv ${actor.level}</span><span class="hint">↑↓ escolher</span></div>
       <div class="cmd-grid" id="cmd-grid"></div>
       <div class="cmd-desc" id="cmd-desc"></div>
-      <div class="cmd-actions"><button class="battle-confirm" id="cmd-confirm">Confirmar <span>↵</span></button></div>`;
+      <div class="cmd-footer">
+        <button class="cmd-confirm" id="cmd-confirm">✓ Confirmar <span class="key">Enter</span></button>
+      </div>`;
     const grid = el('#cmd-grid');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const update = () => {
+    // Only toggle classes / update text here: rebuilding the grid on hover
+    // destroyed the hovered button and caused an endless mouseenter loop.
+    const paint = () => {
       grid.querySelectorAll('.cmd-btn').forEach((b, i) => b.classList.toggle('sel', i === sel));
       desc.innerHTML = `<b>${items[sel].label}</b> — ${items[sel].desc}`;
     };
-    const build = () => {
-      grid.innerHTML = items.map((it, i) => `<button class="cmd-btn ${i === sel ? 'sel' : ''}" data-i="${i}" ${it.disabled ? 'disabled' : ''}>
+    grid.innerHTML = items.map((it, i) => `<button class="cmd-btn ${i === sel ? 'sel' : ''}" data-i="${i}" ${it.disabled ? 'disabled' : ''}>
         <span>${it.icon}</span><span>${it.label}</span><span class="key">${it.key}</span></button>`).join('');
-      grid.querySelectorAll('.cmd-btn').forEach((b, i) => {
-        // Update in place: rebuilding on hover detaches the node mid-click.
-        b.addEventListener('mouseenter', () => { if (!items[i].disabled) { sel = i; update(); audio.sfx('cursor'); } });
-        b.addEventListener('click', () => { if (!items[i].disabled) choose(i); });
-      });
-    };
     const choose = (i) => {
-      if (items[i].disabled) return;
+      if (!items[i] || items[i].disabled) return;
       audio.sfx('confirm');
       root.classList.remove('with-party');
       root.innerHTML = '';
       finishMenu(handler, resolve, items[i].value);
     };
+    grid.querySelectorAll('.cmd-btn').forEach((b, i) => {
+      b.addEventListener('mouseenter', () => {
+        if (items[i].disabled || sel === i) return;
+        sel = i; paint(); audio.sfx('cursor');
+      });
+      b.addEventListener('click', () => choose(i));
+    });
+    el('#cmd-confirm').addEventListener('click', () => choose(sel));
     const handler = (a) => {
-      if (a === 'left') { sel = (sel + items.length - 1) % items.length; update(); return true; }
-      if (a === 'right') { sel = (sel + 1) % items.length; update(); return true; }
-      if (a === 'up') { sel = (sel + items.length - 2) % items.length; update(); return true; }
-      if (a === 'down') { sel = (sel + 2) % items.length; update(); return true; }
+      if (a === 'left' || a === 'up') { sel = (sel + (a === 'up' ? items.length - 2 : items.length - 1)) % items.length; paint(); audio.sfx('cursor'); return true; }
+      if (a === 'right' || a === 'down') { sel = (sel + (a === 'down' ? 2 : 1)) % items.length; paint(); audio.sfx('cursor'); return true; }
       if (a === 'confirm') { choose(sel); return true; }
       if (a === 'cancel') { return true; }
       return true;
     };
     Input.push(handler);
-    build();
-    el('#cmd-confirm').addEventListener('click', () => choose(sel));
+    paint();
   });
 }
 
@@ -221,41 +267,46 @@ export function skillMenu(state, actor) {
     root.innerHTML = `<div class="cmd-head"><span>HABILIDADES · ${actor.name.toUpperCase()}</span><span class="hint">MP ${actor.mp}/${actor.maxMp}</span></div>
       <div class="skill-list" id="skill-list"></div>
       <div class="cmd-desc" id="cmd-desc"></div>
-      <div class="cmd-actions"><button class="battle-confirm" id="skill-confirm">Confirmar <span>↵</span></button><button class="battle-back" id="skill-back">Voltar</button></div>`;
+      <div class="cmd-footer">
+        <button class="cmd-confirm" id="cmd-confirm">✓ Confirmar <span class="key">Enter</span></button>
+        <button class="cmd-back" id="cmd-back">✕ Voltar</button>
+      </div>`;
     const list = el('#skill-list');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const update = () => {
+    const paint = () => {
       list.querySelectorAll('.skill-row').forEach((row, i) => row.classList.toggle('sel', i === sel));
       const cur = skills[sel];
       desc.innerHTML = cur ? `<b>${cur.sk.name}</b> — ${cur.sk.desc}` : 'Retornar às ações.';
     };
-    const build = () => {
-      list.innerHTML = skills.map((s, i) => `<div class="skill-row ${i === sel ? 'sel' : ''} ${actor.mp < s.sk.cost ? 'disabled' : ''}" data-i="${i}">
+    list.innerHTML = skills.map((s, i) => `<div class="skill-row ${i === sel ? 'sel' : ''} ${actor.mp < s.sk.cost ? 'disabled' : ''}" data-i="${i}">
         <span>${s.sk.name}</span><span class="cost">${s.sk.cost} MP</span></div>`).join('') +
-        `<div class="skill-row ${sel === skills.length ? 'sel' : ''}" data-i="${skills.length}"><span>Voltar</span><span class="cost">—</span></div>`;
-      list.querySelectorAll('.skill-row').forEach((row, i) => {
-        row.addEventListener('mouseenter', () => { sel = i; update(); });
-        row.addEventListener('click', () => choose(i));
-      });
-    };
+      `<div class="skill-row ${sel === skills.length ? 'sel' : ''}" data-i="${skills.length}"><span>Voltar</span><span class="cost">—</span></div>`;
+    const back = () => { audio.sfx('cancel'); finishMenu(handler, resolve, null); };
     const choose = (i) => {
-      if (i >= skills.length) { audio.sfx('cancel'); finishMenu(handler, resolve, null); return; }
+      if (i >= skills.length) { back(); return; }
       if (actor.mp < skills[i].sk.cost) { audio.sfx('cancel'); ui.toast('MP insuficiente.', 'red', '✦'); return; }
       audio.sfx('confirm');
       finishMenu(handler, resolve, skills[i].sid);
     };
+    list.querySelectorAll('.skill-row').forEach((row, i) => {
+      row.addEventListener('mouseenter', () => {
+        if (sel === i) return;
+        sel = i; paint(); audio.sfx('cursor');
+      });
+      row.addEventListener('click', () => choose(i));
+    });
+    el('#cmd-confirm').addEventListener('click', () => choose(sel));
+    el('#cmd-back').addEventListener('click', back);
     const handler = (a) => {
-      if (a === 'up') { sel = (sel - 1 + skills.length + 1) % (skills.length + 1); update(); return true; }
-      if (a === 'down') { sel = (sel + 1) % (skills.length + 1); update(); return true; }
+      if (a === 'up') { sel = (sel - 1 + skills.length + 1) % (skills.length + 1); paint(); audio.sfx('cursor'); return true; }
+      if (a === 'down') { sel = (sel + 1) % (skills.length + 1); paint(); audio.sfx('cursor'); return true; }
       if (a === 'confirm') { choose(sel); return true; }
-      if (a === 'cancel') { finishMenu(handler, resolve, null); return true; }
+      if (a === 'cancel') { back(); return true; }
       return true;
     };
     Input.push(handler);
-    build();
-    el('#skill-confirm').addEventListener('click', () => choose(sel));
-    el('#skill-back').addEventListener('click', () => choose(skills.length));
+    paint();
   });
 }
 
@@ -263,100 +314,102 @@ export function itemMenu(state, game) {
   return new Promise((resolve) => {
     const root = state.ui.command;
     const ids = Object.keys(game.inventory).filter((id) => ITEMS[id] && !ITEMS[id].key && game.inventory[id] > 0);
-    root.innerHTML = `<div class="cmd-head"><span>ITENS</span><span class="hint">Enter confirma · Esc volta</span></div>
+    root.innerHTML = `<div class="cmd-head"><span>ITENS</span><span class="hint">↑↓ escolher</span></div>
       <div class="skill-list" id="item-list"></div><div class="cmd-desc" id="cmd-desc"></div>
-      <div class="cmd-actions"><button class="battle-confirm" id="item-confirm">Confirmar <span>↵</span></button><button class="battle-back" id="item-back">Voltar</button></div>`;
+      <div class="cmd-footer">
+        <button class="cmd-confirm" id="cmd-confirm">✓ Confirmar <span class="key">Enter</span></button>
+        <button class="cmd-back" id="cmd-back">✕ Voltar</button>
+      </div>`;
     const list = el('#item-list');
     const desc = el('#cmd-desc');
     let sel = 0;
-    const update = () => {
+    const paint = () => {
       list.querySelectorAll('.skill-row').forEach((row, i) => row.classList.toggle('sel', i === sel));
       const cur = ids[sel];
       desc.innerHTML = cur ? ITEMS[cur].desc : 'Retornar às ações.';
     };
-    const build = () => {
-      list.innerHTML = ids.length ? ids.map((id, i) => `<div class="skill-row ${i === sel ? 'sel' : ''}" data-i="${i}">
+    list.innerHTML = ids.length ? ids.map((id, i) => `<div class="skill-row ${i === sel ? 'sel' : ''}" data-i="${i}">
         <span>${ITEMS[id].icon} ${ITEMS[id].name} <span style="color:var(--muted);font-size:14px">x${game.inventory[id]}</span></span><span class="cost">—</span></div>`).join('') +
-        `<div class="skill-row ${sel === ids.length ? 'sel' : ''}" data-i="${ids.length}"><span>Voltar</span><span class="cost">—</span></div>`
-        : `<div class="skill-row sel"><span>Mochila vazia</span></div><div class="skill-row" data-i="0"><span>Voltar</span></div>`;
-      list.querySelectorAll('.skill-row').forEach((row, i) => {
-        row.addEventListener('mouseenter', () => { sel = i; update(); });
-        row.addEventListener('click', () => choose(i));
-      });
-    };
+      `<div class="skill-row ${sel === ids.length ? 'sel' : ''}" data-i="${ids.length}"><span>Voltar</span><span class="cost">—</span></div>`
+      : `<div class="skill-row sel"><span>Mochila vazia</span></div><div class="skill-row" data-i="0"><span>Voltar</span></div>`;
+    const back = () => { audio.sfx('cancel'); finishMenu(handler, resolve, null); };
     const choose = (i) => {
-      if (!ids.length || i >= ids.length) { audio.sfx('cancel'); finishMenu(handler, resolve, null); return; }
+      if (!ids.length || i >= ids.length) { back(); return; }
       audio.sfx('confirm');
       finishMenu(handler, resolve, ids[i]);
     };
+    list.querySelectorAll('.skill-row').forEach((row, i) => {
+      row.addEventListener('mouseenter', () => {
+        if (sel === i) return;
+        sel = i; paint(); audio.sfx('cursor');
+      });
+      row.addEventListener('click', () => choose(i));
+    });
+    el('#cmd-confirm').addEventListener('click', () => choose(sel));
+    el('#cmd-back').addEventListener('click', back);
     const handler = (a) => {
-      if (a === 'up') { sel = (sel - 1 + ids.length + 1) % (ids.length + 1); update(); return true; }
-      if (a === 'down') { sel = (sel + 1) % (ids.length + 1); update(); return true; }
+      if (a === 'up') { sel = (sel - 1 + ids.length + 1) % (ids.length + 1); paint(); audio.sfx('cursor'); return true; }
+      if (a === 'down') { sel = (sel + 1) % (ids.length + 1); paint(); audio.sfx('cursor'); return true; }
       if (a === 'confirm') { choose(sel); return true; }
-      if (a === 'cancel') { finishMenu(handler, resolve, null); return true; }
+      if (a === 'cancel') { back(); return true; }
       return true;
     };
     Input.push(handler);
-    build();
-    el('#item-confirm').addEventListener('click', () => choose(sel));
-    el('#item-back').addEventListener('click', () => choose(ids.length));
+    paint();
   });
 }
 
 export function targetMenu(state, opts = {}) {
   const side = opts.side || 'enemy';
-  const list = (side === 'enemy' ? state.enemies : state.allies).filter((a) => opts.allowDead ? true : a.hp > 0);
+  const pool = side === 'enemy' ? state.enemies : state.allies;
+  const list = pool.filter((a) => opts.onlyDead ? a.hp <= 0 : opts.allowDead ? true : a.hp > 0);
   return new Promise((resolve) => {
     const layer = state.ui.target;
     if (!list.length) { resolve(null); return; }
     let sel = 0;
-    const update = () => {
-      layer.querySelectorAll('.target-card').forEach((b, i) => b.classList.toggle('sel', i === sel));
-      state.hoverTarget = list[sel];
-    };
-    const build = () => {
-      layer.innerHTML = `<div class="target-layer">
-        <div class="target-cards">${list.map((a, i) => `
-          <button class="target-card ${i === sel ? 'sel' : ''}" data-i="${i}">
-            <div class="tc-name">${a.name}</div>
-            <div class="tc-sub">${side === 'enemy' ? (a.hp > 0 ? 'Vivo' : 'Caído') : `${a.hp}/${a.maxHp} HP`}</div>
-            ${side === 'enemy' ? `<div class="bar hp"><i style="width:${clamp(a.hp / a.maxHp, 0, 1) * 100}%"></i></div>` : ''}
-          </button>`).join('')}</div>
-        <div class="target-actions">
-          <button class="battle-confirm" id="target-confirm">Confirmar <span>↵</span></button>
-          <button class="battle-back" id="target-back">Voltar</button>
-        </div>
-      </div>`;
-      layer.querySelectorAll('.target-card').forEach((b, i) => {
-        b.addEventListener('mouseenter', () => { sel = i; update(); });
-        b.addEventListener('click', () => choose(i));
-      });
-      el('#target-confirm').addEventListener('click', () => choose(sel));
-      el('#target-back').addEventListener('click', cancel);
-      update();
+    const cleanup = () => { state.hoverTarget = null; layer.innerHTML = ''; };
+    layer.innerHTML = `<div class="target-layer">
+      <div class="target-cards">${list.map((a, i) => `
+        <button class="target-card ${i === sel ? 'sel' : ''}" data-i="${i}">
+          <div class="tc-name">${a.name}</div>
+          <div class="tc-sub">${side === 'enemy' ? (a.hp > 0 ? 'Vivo' : 'Caído') : `${a.hp}/${a.maxHp} HP`}</div>
+          ${side === 'enemy' ? `<div class="bar hp"><i style="width:${clamp(a.hp / a.maxHp, 0, 1) * 100}%"></i></div>` : ''}
+        </button>`).join('')}</div>
+      <div class="target-actions">
+        <button class="cmd-confirm" id="target-confirm">✓ Confirmar</button>
+        <button class="cmd-back" id="target-back">✕ Voltar</button>
+      </div></div>`;
+    const cards = layer.querySelectorAll('.target-card');
+    const paint = () => {
+      cards.forEach((b, i) => b.classList.toggle('sel', i === sel));
+      state.hoverTarget = list[sel] || null;
     };
     const choose = (i) => {
       if (!list[i]) return;
       if (side === 'enemy' && list[i].hp <= 0) { audio.sfx('cancel'); return; }
       audio.sfx('confirm');
-      state.hoverTarget = null;
-      layer.innerHTML = '';
+      cleanup();
       finishMenu(handler, resolve, list[i]);
     };
-    const cancel = () => {
-      state.hoverTarget = null;
-      layer.innerHTML = '';
-      finishMenu(handler, resolve, null);
-    };
+    const back = () => { audio.sfx('cancel'); cleanup(); finishMenu(handler, resolve, null); };
+    cards.forEach((b, i) => {
+      b.addEventListener('mouseenter', () => {
+        if (sel === i) return;
+        sel = i; paint(); audio.sfx('cursor');
+      });
+      b.addEventListener('click', () => choose(i));
+    });
+    el('#target-confirm').addEventListener('click', () => choose(sel));
+    el('#target-back').addEventListener('click', back);
     const handler = (a) => {
-      if (a === 'left' || a === 'up') { sel = (sel - 1 + list.length) % list.length; update(); return true; }
-      if (a === 'right' || a === 'down') { sel = (sel + 1) % list.length; update(); return true; }
+      if (a === 'left' || a === 'up') { sel = (sel - 1 + list.length) % list.length; paint(); audio.sfx('cursor'); return true; }
+      if (a === 'right' || a === 'down') { sel = (sel + 1) % list.length; paint(); audio.sfx('cursor'); return true; }
       if (a === 'confirm') { choose(sel); return true; }
-      if (a === 'cancel') { cancel(); return true; }
+      if (a === 'cancel') { back(); return true; }
       return true;
     };
     Input.push(handler);
-    build();
+    paint();
   });
 }
 
@@ -366,7 +419,8 @@ export function drawBattleFrame(state, now) {
   state.lastTime = now;
   state.time += dt;
   const g = state.ctx;
-  const w = state.w, h = state.h;
+  const w = state.w = window.innerWidth;
+  const h = state.h = window.innerHeight;
   if (!state.fx) state.fx = new FX();
   state.fx.update(dt);
   layoutBattle(state);
@@ -440,21 +494,24 @@ export function drawBattleFrame(state, now) {
       continue;
     }
     drawEnemy(g, e.id, e.x + dx, e.y, e.scale, state.time, { flash: e.flashT > 0, phase: e.bobPhase });
-    // HP bar (visual height is normalized to scale * 28)
-    const bw = clamp(e.scale * 24, 64, 170);
-    const bx = e.x - bw / 2, by = e.y - (e.scale * 28) - 18;
-    g.fillStyle = 'rgba(4,7,14,.8)';
-    g.fillRect(bx - 2, by - 2, bw + 4, 14);
-    g.fillStyle = '#3a1520'; g.fillRect(bx, by, bw, 6);
-    const pct = clamp(e.hp / e.maxHp, 0, 1);
-    const grd = g.createLinearGradient(bx, by, bx + bw, by);
-    grd.addColorStop(0, '#8e2737'); grd.addColorStop(0.6, '#e35f72'); grd.addColorStop(1, '#ff9aa7');
-    g.fillStyle = grd; g.fillRect(bx, by, bw * pct, 6);
-    g.strokeStyle = 'rgba(231,199,123,.35)'; g.lineWidth = 1; g.strokeRect(bx + 0.5, by + 0.5, bw - 1, 5);
-    g.font = '700 13px "VT323", monospace';
-    g.textAlign = 'center'; g.textBaseline = 'bottom';
-    g.fillStyle = 'rgba(8,8,14,.8)'; g.fillText(e.name, e.x + 1, by - 4);
-    g.fillStyle = '#e8e0cc'; g.fillText(e.name, e.x, by - 5);
+    // HP bar — anchored to the sprite's real drawn height so it never floats.
+    // Bosses already have the top strip, so skip the duplicate world-space bar.
+    const bw = clamp((e.drawW || e.scale * 30) * 0.92, 64, 190);
+    const bx = e.x - bw / 2, by = e.y - (e.drawH || e.scale * 48) - 18;
+    if (!e.boss) {
+      g.fillStyle = 'rgba(4,7,14,.8)';
+      g.fillRect(bx - 2, by - 2, bw + 4, 14);
+      g.fillStyle = '#3a1520'; g.fillRect(bx, by, bw, 6);
+      const pct = clamp(e.hp / e.maxHp, 0, 1);
+      const grd = g.createLinearGradient(bx, by, bx + bw, by);
+      grd.addColorStop(0, '#8e2737'); grd.addColorStop(0.6, '#e35f72'); grd.addColorStop(1, '#ff9aa7');
+      g.fillStyle = grd; g.fillRect(bx, by, bw * pct, 6);
+      g.strokeStyle = 'rgba(231,199,123,.35)'; g.lineWidth = 1; g.strokeRect(bx + 0.5, by + 0.5, bw - 1, 5);
+      g.font = '700 13px "VT323", monospace';
+      g.textAlign = 'center'; g.textBaseline = 'bottom';
+      g.fillStyle = 'rgba(8,8,14,.8)'; g.fillText(e.name, e.x + 1, by - 4);
+      g.fillStyle = '#e8e0cc'; g.fillText(e.name, e.x, by - 5);
+    }
     // target marker
     if (state.hoverTarget === e) {
       g.fillStyle = '#ffe6a3';
@@ -474,7 +531,10 @@ export function drawBattleFrame(state, now) {
 }
 
 export function battleActorPos(actor) {
-  if (actor.isEnemy) return { x: actor.x, y: actor.y - actor.scale * 14, h: actor.scale * 28 };
+  if (actor.isEnemy) {
+    const h = actor.drawH || actor.scale * 48;
+    return { x: actor.x, y: actor.y - h * 0.55, h };
+  }
   return { x: actor.bx, y: actor.by - actor.bs * 14, h: actor.bs * 28 };
 }
 

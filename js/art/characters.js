@@ -141,76 +141,86 @@ function drawWeapon(g, d, facing) {
   px(g, '#8a8f98', 13, 16, 2, 2);
 }
 
+// 4-frame walk cycle: 0 idle, 1 left contact, 2 passing, 3 right contact.
+// The passing frame raises the body 1px and brings the legs together, which
+// reads much better than the old 2-frame flicker at 36ms per frame.
 function drawHuman(g, d, facing, frame) {
   const o = '#17121a';
-  // 0 = idle, 1 = left foot forward, 2 = passing pose, 3 = right foot forward.
-  const phase = ((frame % 4) + 4) % 4;
-  const step = phase === 1 ? 1 : phase === 3 ? -1 : 0;
-  const bob = phase === 2 ? 1 : 0;
-  const armSwing = phase === 1 ? 1 : phase === 3 ? -1 : 0;
+  const f = ((frame | 0) % 4 + 4) % 4;
+  const contact = f === 1 || f === 3;
+  const pass = f === 2;
+  const bob = pass ? 1 : 0;
   const top = 10 - bob;
+  const armSwing = f === 1 ? -1 : f === 3 ? 1 : 0;
+  const leftLift = f === 3 ? 1 : 0;
+  const rightLift = f === 1 ? 1 : 0;
 
-  // ground shadow
+  // ground shadow (slightly tighter while passing)
   g.fillStyle = 'rgba(0,0,0,.3)';
-  g.beginPath(); g.ellipse(10, 26, 5.5, 1.8, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(10, 26, pass ? 5 : 5.8, 1.8, 0, 0, Math.PI * 2); g.fill();
 
   if (facing === 'up') {
-    // cape
+    // cape sways a little with the stride
+    const capeX = f === 1 ? -1 : f === 3 ? 1 : 0;
     if (d.cape) {
-      px(g, o, 4, top - 1, 12, 12);
-      px(g, d.cape2 || d.cape, 5, top, 10, 11);
-      px(g, d.cape, 5, top, 10, 2);
-      px(g, d.cape2 || d.cape, 6, top + 8, 8, 3);
+      px(g, o, 4 + capeX, top - 1, 12, 12);
+      px(g, d.cape2 || d.cape, 5 + capeX, top, 10, 11);
+      px(g, d.cape, 5 + capeX, top, 10, 2);
+      px(g, d.cape2 || d.cape, 6 + capeX, top + 8, 8, 3);
     }
     // legs
-    px(g, o, 5, 19 - bob, 4, 8);
-    px(g, o, 11, 19 - bob, 4, 8);
-    px(g, d.pants, 6, 20 - bob, 2, 5 + (step > 0 ? 1 : 0));
-    px(g, d.pants, 12, 20 - bob, 2, 5 + (step < 0 ? 1 : 0));
-    px(g, d.boots, 6, 25 - bob, 3, 2);
-    px(g, d.boots, 12, 25 - bob, 3, 2);
+    const spread = contact ? 1 : 0;
+    const lx = 5 - spread;
+    const rx = 11 + spread;
+    px(g, o, lx, 19 - bob + leftLift, 4, 8);
+    px(g, o, rx, 19 - bob + rightLift, 4, 8);
+    px(g, d.pants, lx + 1, 20 - bob + leftLift, 2, 5);
+    px(g, d.pants, rx + 1, 20 - bob + rightLift, 2, 5);
+    px(g, d.boots, lx + 1, 25 - bob + leftLift, 3, 2);
+    px(g, d.boots, rx + 1, 25 - bob + rightLift, 3, 2);
     // body
     px(g, o, 4, top - 1, 12, 11);
     px(g, d.top, 5, top, 10, 10);
     px(g, d.top2, 5, top + 6, 10, 4);
     px(g, d.trim, 5, top + 7, 10, 1);
     px(g, d.top2, 5, top, 3, 7);
-    // arms (opposite swing keeps the walk readable from above)
-    const aL = top + 1 + armSwing;
-    const aR = top + 1 - armSwing;
-    px(g, o, 2, aL, 3, 8);
-    px(g, o, 15, aR, 3, 8);
-    px(g, d.top2, 3, aL + 1, 2, 6);
-    px(g, d.top2, 15, aR + 1, 2, 6);
-    px(g, d.skin, 3, aL + 7, 2, 2);
-    px(g, d.skin, 15, aR + 7, 2, 2);
+    // arms swing opposite to the legs
+    px(g, o, 2, top + 1 - armSwing, 3, 8);
+    px(g, o, 15, top + 1 + armSwing, 3, 8);
+    px(g, d.top2, 3, top + 2 - armSwing, 2, 6);
+    px(g, d.top2, 15, top + 2 + armSwing, 2, 6);
+    px(g, d.skin, 3, top + 8 - armSwing, 2, 2);
+    px(g, d.skin, 15, top + 8 + armSwing, 2, 2);
     // head
-    px(g, o, 5, 2, 10, 10);
-    px(g, d.skin, 6, 3, 8, 8);
-    px(g, d.skin2, 12, 4, 2, 6);
-    drawHair(g, d, 'up', 3);
+    px(g, o, 5, 2 - bob, 10, 10);
+    px(g, d.skin, 6, 3 - bob, 8, 8);
+    px(g, d.skin2, 12, 4 - bob, 2, 6);
+    drawHair(g, d, 'up', 3 - bob);
     drawWeapon(g, d, 'up');
     return;
   }
 
   if (facing === 'right') {
+    const capeX = f === 1 ? -1 : f === 3 ? 1 : 0;
     if (d.cape) {
-      px(g, o, 3, top - 1, 9, 13);
-      px(g, d.cape2 || d.cape, 4, top, 7, 12);
-      px(g, d.cape, 4, top, 5, 2);
+      px(g, o, 3 + capeX, top - 1, 9, 13);
+      px(g, d.cape2 || d.cape, 4 + capeX, top, 7, 12);
+      px(g, d.cape, 4 + capeX, top, 5, 2);
     }
-    // back arm
-    const backArmY = top + 2 - armSwing;
-    px(g, o, 5, backArmY, 3, 7);
-    px(g, d.top2, 5, backArmY + 1, 2, 5);
-    // legs
-    const l1 = 20 - bob - (step > 0 ? 1 : 0), l2 = 20 - bob - (step < 0 ? 1 : 0);
-    px(g, o, 6, l1, 4, 7);
-    px(g, o, 10, l2, 4, 7);
-    px(g, d.pants, 7, l1 + 1, 2, 4);
-    px(g, d.pants, 11, l2 + 1, 2, 4);
-    px(g, d.boots, 7, l1 + 5, 3, 2);
-    px(g, d.boots, 11, l2 + 5, 3, 2);
+    // back leg first, then front leg: the stride swaps their x positions
+    const backX = f === 1 ? 6 : f === 3 ? 12 : 8;
+    const frontX = f === 1 ? 12 : f === 3 ? 6 : 9;
+    const backLift = f === 1 ? 0 : f === 3 ? 1 : 0;
+    const frontLift = f === 1 ? 1 : f === 3 ? 0 : 0;
+    px(g, o, backX, 19 - bob + backLift, 4, 8);
+    px(g, o, frontX, 19 - bob + frontLift, 4, 8);
+    px(g, d.pants, backX + 1, 20 - bob + backLift, 2, 5);
+    px(g, d.pants, frontX + 1, 20 - bob + frontLift, 2, 5);
+    px(g, d.boots, backX + 1, 25 - bob + backLift, 3, 2);
+    px(g, d.boots, frontX + 1, 25 - bob + frontLift, 3, 2);
+    // back arm, swinging opposite the near leg
+    px(g, o, 5, top + 2 - armSwing, 3, 7);
+    px(g, d.top2, 5, top + 3 - armSwing, 2, 5);
     // body
     px(g, o, 5, top - 1, 10, 11);
     px(g, d.top, 6, top, 8, 10);
@@ -218,45 +228,45 @@ function drawHuman(g, d, facing, frame) {
     px(g, d.trim, 6, top + 7, 8, 1);
     if (d.skirt) { px(g, o, 4, top + 8, 12, 6); px(g, d.skirt, 5, top + 8, 10, 5); }
     // front arm
-    const frontArmY = top + 2 + armSwing;
-    px(g, o, 12, frontArmY, 3, 8);
-    px(g, d.top, 12, frontArmY, 2, 5);
-    px(g, d.skin, 12, frontArmY + 5, 2, 3);
+    px(g, o, 12, top + 2 + armSwing, 3, 8);
+    px(g, d.top, 12, top + 2 + armSwing, 2, 5);
+    px(g, d.skin, 12, top + 7 + armSwing, 2, 3);
     // head
-    px(g, o, 6, 2, 9, 10);
-    px(g, d.skin, 7, 3, 7, 8);
-    px(g, d.skin2, 12, 4, 2, 6);
-    px(g, d.skin, 15, 7, 1, 2); // nose
+    px(g, o, 6, 2 - bob, 9, 10);
+    px(g, d.skin, 7, 3 - bob, 7, 8);
+    px(g, d.skin2, 12, 4 - bob, 2, 6);
+    px(g, d.skin, 15, 7 - bob, 1, 2); // nose
     // eye
-    px(g, d.eye || '#241610', 12, 6, 1, 2);
-    drawHair(g, d, 'right', 3);
-    if (d.beard) { px(g, d.beard, 10, 10, 4, 2); px(g, d.beard, 12, 9, 2, 1); }
+    px(g, d.eye || '#241610', 12, 6 - bob, 1, 2);
+    drawHair(g, d, 'right', 3 - bob);
+    if (d.beard) { px(g, d.beard, 10, 10 - bob, 4, 2); px(g, d.beard, 12, 9 - bob, 2, 1); }
     drawWeapon(g, d, 'right');
     return;
   }
 
   // facing down
+  const capeX = f === 1 ? -1 : f === 3 ? 1 : 0;
   if (d.cape) {
-    px(g, o, 3, top - 1, 14, 14);
-    px(g, d.cape2 || d.cape, 4, top, 12, 13);
-    px(g, d.cape, 4, top, 12, 2);
-    px(g, d.cape2 || d.cape, 4, top + 10, 12, 2);
+    px(g, o, 3 + capeX, top - 1, 14, 14);
+    px(g, d.cape2 || d.cape, 4 + capeX, top, 12, 13);
+    px(g, d.cape, 4 + capeX, top, 12, 2);
+    px(g, d.cape2 || d.cape, 4 + capeX, top + 10, 12, 2);
   }
-  // legs
-  const l1 = 20 - bob - (step > 0 ? 1 : 0), l2 = 20 - bob - (step < 0 ? 1 : 0);
-  px(g, o, 5, l1, 4, 7);
-  px(g, o, 11, l2, 4, 7);
-  px(g, d.pants, 6, l1 + 1, 2, 4);
-  px(g, d.pants, 12, l2 + 1, 2, 4);
-  px(g, d.boots, 6, l1 + 5, 3, 2);
-  px(g, d.boots, 12, l2 + 5, 3, 2);
+  // legs: stride opens and closes; trailing foot lifts 1px
+  const spread = contact ? 1 : 0;
+  const lx = 5 - spread;
+  const rx = 11 + spread;
+  px(g, o, lx, 19 - bob + leftLift, 4, 7);
+  px(g, o, rx, 19 - bob + rightLift, 4, 7);
+  px(g, d.pants, lx + 1, 20 - bob + leftLift, 2, 4);
+  px(g, d.pants, rx + 1, 20 - bob + rightLift, 2, 4);
+  px(g, d.boots, lx + 1, 25 - bob + leftLift, 3, 2);
+  px(g, d.boots, rx + 1, 25 - bob + rightLift, 3, 2);
   // arms behind
-  const aL = top + 1 + armSwing;
-  const aR = top + 1 - armSwing;
-  px(g, o, 2, aL, 3, 8);
-  px(g, o, 15, aR, 3, 8);
-  px(g, d.top2, 3, aL + 1, 2, 5);
-  px(g, d.top2, 15, aR + 1, 2, 5);
+  px(g, o, 2, top + 1 - armSwing, 3, 8);
+  px(g, o, 15, top + 1 + armSwing, 3, 8);
+  px(g, d.top2, 3, top + 2 - armSwing, 2, 5);
+  px(g, d.top2, 15, top + 2 + armSwing, 2, 5);
   // body
   px(g, o, 4, top - 1, 12, 11);
   px(g, d.top, 5, top, 10, 10);
@@ -267,25 +277,25 @@ function drawHuman(g, d, facing, frame) {
   px(g, d.trim, 9, top + 7, 2, 2);
   if (d.skirt) { px(g, o, 4, top + 8, 12, 7); px(g, d.skirt, 5, top + 8, 10, 6); px(g, d.top2, 5, top + 12, 10, 2); }
   // hands
-  px(g, d.skin, 3, aL + 7, 2, 2);
-  px(g, d.skin, 15, aR + 7, 2, 2);
+  px(g, d.skin, 3, top + 8 - armSwing, 2, 2);
+  px(g, d.skin, 15, top + 8 + armSwing, 2, 2);
   // head
-  px(g, o, 5, 2, 10, 10);
-  px(g, d.skin, 6, 3, 8, 8);
-  px(g, d.skin2, 12, 4, 2, 7);
-  px(g, d.skin2, 6, 9, 8, 2);
+  px(g, o, 5, 2 - bob, 10, 10);
+  px(g, d.skin, 6, 3 - bob, 8, 8);
+  px(g, d.skin2, 12, 4 - bob, 2, 7);
+  px(g, d.skin2, 6, 9 - bob, 8, 2);
   // eyes
-  px(g, d.eye || '#241610', 8, 6, 1, 2);
-  px(g, d.eye || '#241610', 12, 6, 1, 2);
-  px(g, '#fff', 8, 6, 1, 1);
-  px(g, '#fff', 12, 6, 1, 1);
+  px(g, d.eye || '#241610', 8, 6 - bob, 1, 2);
+  px(g, d.eye || '#241610', 12, 6 - bob, 1, 2);
+  px(g, '#fff', 8, 6 - bob, 1, 1);
+  px(g, '#fff', 12, 6 - bob, 1, 1);
   // mouth
-  px(g, d.skin2, 10, 9, 2, 1);
-  drawHair(g, d, 'down', 3);
+  px(g, d.skin2, 10, 9 - bob, 2, 1);
+  drawHair(g, d, 'down', 3 - bob);
   if (d.beard) {
-    px(g, d.beard, 7, 9, 7, 3);
-    px(g, d.beard, 9, 11, 3, 1);
-    px(g, d.skin2, 10, 9, 2, 1);
+    px(g, d.beard, 7, 9 - bob, 7, 3);
+    px(g, d.beard, 9, 11 - bob, 3, 1);
+    px(g, d.skin2, 10, 9 - bob, 2, 1);
   }
   drawWeapon(g, d, 'down');
 }

@@ -29,7 +29,7 @@ function makeEnemy(id, index, scale = 1) {
     spd: d.spd, lck: d.lck,
     xp: d.xp, gold: d.gold, weak: d.weak || [], resist: d.resist || [],
     skills: [...(d.skills || [])], boss: !!d.boss, accent: d.accent,
-    scaleBase: d.scale || 5, size: d.size || 1, status: {}, buffs: [], defending: false,
+    scaleBase: d.scale || 5, status: {}, buffs: [], defending: false,
     anim: null, flashT: 0, deadT: 0, bobPhase: index * 1.7,
     x: 0, y: 0, scale: d.scale || 5,
   };
@@ -276,9 +276,8 @@ async function pickPlayerTarget(state, actor, sk) {
   if (sk.target === 'deadAlly') {
     const dead = state.allies.filter((m) => m.hp <= 0);
     if (!dead.length) { ui.toast('Nenhum aliado caído.', 'red', '✚'); return undefined; }
-    const t = await targetMenu(state, { side: 'ally', allowDead: true });
+    const t = await targetMenu(state, { side: 'ally', allowDead: true, onlyDead: true });
     if (!t) return null;
-    if (t.hp > 0) { ui.toast('Escolha um aliado caído.', 'red', '✚'); return undefined; }
     return t;
   }
   return null;
@@ -287,27 +286,36 @@ async function pickPlayerTarget(state, actor, sk) {
 async function useBattleItem(state, actor, id) {
   const it = ITEMS[id];
   const game = state.game;
-  if (!it || !game.inventory[id]) return false;
+  if (!it || !game.inventory[id]) return 'cancelled';
   let targets = [];
   if (it.target === 'ally') {
     const t = await targetMenu(state, { side: 'ally', allowDead: false });
-    if (!t) return false;
+    if (!t) return 'cancelled';
     targets = [t];
   } else if (it.target === 'allEnemies') {
     targets = state.enemies.filter((e) => e.hp > 0);
   } else {
     targets = [actor];
   }
+
+  if (it.heal && targets.every((t) => t.hp >= t.maxHp)) {
+    ui.toast('Ninguém precisa de cura.', 'red', '♥');
+    return false;
+  }
+  if (it.mp && targets.every((t) => t.mp >= t.maxMp)) {
+    ui.toast('Ninguém precisa de MP.', 'red', '✦');
+    return false;
+  }
+
   logMsg(state, `${actor.name} usa <b>${it.name}</b>.`);
   if (it.heal) {
     for (const t of targets) {
-      if (t.hp >= t.maxHp) { ui.toast(`${t.name} já está com HP cheio.`, '', '♥'); return false; }
-      healTarget(state, t, it.heal);
+      if (t.hp < t.maxHp) healTarget(state, t, it.heal);
     }
   }
   if (it.mp) {
     for (const t of targets) {
-      if (t.mp >= t.maxMp) { ui.toast(`${t.name} já está com MP cheio.`, '', '✦'); return false; }
+      if (t.mp >= t.maxMp) continue;
       t.mp = Math.min(t.maxMp, t.mp + it.mp);
       const p = battleActorPos(t);
       state.fx.number(p.x, p.y, `+${it.mp} MP`, { color: '#8ac8ff', size: 20 });
@@ -366,10 +374,13 @@ async function allyTurn(state, actor) {
       return;
     }
     if (cmd === 'item') {
-      const id = await itemMenu(state, state.game);
-      if (!id) continue;
-      const used = await useBattleItem(state, actor, id);
-      if (used) return;
+      while (true) {
+        const id = await itemMenu(state, state.game);
+        if (!id) break;
+        const used = await useBattleItem(state, actor, id);
+        if (used === 'cancelled') continue;
+        if (used) return;
+      }
       continue;
     }
     if (cmd === 'defend') {

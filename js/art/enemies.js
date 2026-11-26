@@ -288,6 +288,26 @@ export const ENEMY_META = {
   slime: { accent:'#7ddba0' },
 };
 
+// Humanoid enemies are drawn from 20x28 character sprites at 1.35x, while the
+// monster sheets are 48x48. Layout code needs these intrinsic sizes to keep
+// sprites and their HP bars proportional on screen.
+export const HUMANOID_ENEMIES = new Set(['bandit', 'guard', 'jailer', 'champion', 'darkknight', 'dorian']);
+
+export function enemySpriteMetrics(id) {
+  if (HUMANOID_ENEMIES.has(id)) return { w: 20 * 1.35, h: 28 * 1.35 };
+  return { w: W, h: H };
+}
+
+export function enemyDrawnHeight(id, scale) {
+  if (HUMANOID_ENEMIES.has(id)) return 28 * Math.round(scale * 1.35);
+  return H * scale;
+}
+
+export function enemyDrawnWidth(id, scale) {
+  if (HUMANOID_ENEMIES.has(id)) return 20 * Math.round(scale * 1.35);
+  return W * scale;
+}
+
 export function getEnemySprite(id) {
   if (cache.has(id)) return cache.get(id);
   const { c, g } = makeCanvas(W, H);
@@ -325,19 +345,17 @@ function getSil(id) {
   return c;
 }
 
-// x,y = feet center. `scale` is normalized to a 28px reference height so
-// humanoids and monsters keep the same visual weight in battle.
+// x,y = feet center. Humanoid ids are drawn from character sheets for crispness.
 export function drawEnemy(g, id, x, y, scale = 6, time = 0, opts = {}) {
-  const humanoids = { bandit:1, guard:1, jailer:1, champion:1, darkknight:1, dorian:1 };
-  const bob = opts.bob === false ? 0 : Math.sin(time * 2 + (opts.phase || 0)) * scale * 0.3;
-  if (humanoids[id]) {
+  const bob = opts.bob === false ? 0 : Math.sin(time * 2 + (opts.phase || 0)) * scale * 0.35;
+  if (HUMANOID_ENEMIES.has(id)) {
     const map = { bandit:'bandit', guard:'guard', jailer:'jailer', champion:'champion', darkknight:'darkknight', dorian:'dorian' };
-    drawCharacter(g, map[id], x, y + bob, 'right', 0, Math.round(scale), opts);
+    const cs = Math.round(scale * 1.35);
+    drawCharacter(g, map[id], x, y + bob, 'right', 0, cs, opts);
     return;
   }
   const spr = opts.flash ? getSil(id) : getEnemySprite(id);
-  const s = scale * 28 / H;
-  const w = W * s, h = H * s;
+  const w = W * scale, h = H * scale;
   const dx = Math.round(x - w / 2), dy = Math.round(y - h + bob);
   if (opts.alpha != null) g.globalAlpha = opts.alpha;
   g.drawImage(spr, dx, dy, w, h);
