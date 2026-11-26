@@ -19,57 +19,90 @@ const WOLF_PAL = {
 };
 
 function drawWolf(g, p, big = false) {
-  const s = big ? 1.08 : 1;
-  shadow(g, 17);
-  // tail
-  px(g, p.o, 2, 16, 10, 8);
-  px(g, p.fur2, 3, 17, 8, 5);
-  px(g, p.fur, 3, 17, 4, 3);
-  // back legs
-  px(g, p.o, 12, 29, 6, 13);
-  px(g, p.o, 28, 29, 6, 13);
-  px(g, p.fur2, 13, 31, 4, 8);
-  px(g, p.fur2, 29, 31, 4, 8);
-  px(g, p.o, 11, 40, 7, 4);
-  px(g, p.o, 27, 40, 7, 4);
-  // body
-  px(g, p.o, 8, 17, 28, 16);
-  px(g, p.fur, 9, 18, 26, 13);
-  px(g, p.fur2, 9, 27, 26, 3);
-  px(g, p.belly, 14, 29, 16, 2);
-  // back fur tufts
-  px(g, p.fur, 10, 15, 4, 3);
-  px(g, p.fur, 16, 14, 5, 3);
-  px(g, p.fur, 24, 15, 4, 3);
+  const s = big ? 1.06 : 1;
+  g.save();
+  if (s !== 1) {
+    g.translate(24, 45);
+    g.scale(s, s);
+    g.translate(-24, -45);
+  }
+  shadow(g, 18, 45);
+
+  // bushy tail, angled up behind the hips
+  px(g, p.o, 1, 16, 12, 11);
+  px(g, p.fur2, 2, 17, 10, 8);
+  px(g, p.fur, 2, 17, 6, 4);
+  px(g, p.fur2, 0, 14, 6, 5);
+  px(g, p.fur, 1, 15, 3, 2);
+
+  // back legs (drawn first so the body overlaps their tops)
+  px(g, p.o, 12, 29, 7, 16);
+  px(g, p.fur2, 13, 30, 5, 12);
+  px(g, p.o, 19, 30, 6, 15);
+  px(g, p.fur2, 20, 31, 4, 11);
+  px(g, p.o, 11, 42, 8, 3);
+  px(g, p.o, 19, 43, 7, 2);
+  px(g, p.fur2, 12, 40, 6, 2);
+
+  // long body with a sloped back and chest fur
+  px(g, p.o, 8, 16, 31, 19);
+  px(g, p.fur, 9, 17, 29, 16);
+  px(g, p.fur2, 9, 29, 29, 4);
+  px(g, p.belly, 13, 31, 20, 2);
+  px(g, p.fur, 10, 14, 5, 4);
+  px(g, p.fur, 17, 13, 6, 4);
+  px(g, p.fur, 25, 13, 6, 4);
+  px(g, p.fur2, 12, 27, 9, 3);
+  px(g, p.fur, 30, 24, 5, 6);
+
   // front legs
-  px(g, p.o, 17, 30, 6, 12);
-  px(g, p.o, 23, 30, 6, 12);
-  px(g, p.fur, 18, 31, 4, 8);
-  px(g, p.fur, 24, 31, 4, 8);
-  px(g, p.o, 16, 40, 7, 4);
-  px(g, p.o, 22, 40, 7, 4);
-  px(g, p.claw, 16, 42, 3, 1);
-  px(g, p.claw, 22, 42, 3, 1);
+  px(g, p.o, 28, 30, 7, 15);
+  px(g, p.fur, 29, 31, 5, 11);
+  px(g, p.o, 35, 31, 6, 14);
+  px(g, p.fur, 36, 32, 4, 10);
+  px(g, p.o, 27, 43, 8, 2);
+  px(g, p.o, 35, 44, 7, 1);
+  px(g, p.claw, 27, 44, 3, 1);
+  px(g, p.claw, 35, 44, 3, 1);
+
+  // neck joins the body to the head
+  px(g, p.o, 33, 13, 9, 12);
+  px(g, p.fur, 34, 14, 7, 10);
+  px(g, p.fur2, 34, 22, 7, 2);
+
   // head
-  px(g, p.o, 31, 11, 13, 17);
-  px(g, p.fur, 32, 12, 11, 14);
-  px(g, p.fur2, 33, 22, 10, 3);
-  // ears
-  px(g, p.o, 31, 5, 5, 8);
-  px(g, p.fur, 32, 6, 3, 6);
-  px(g, p.o, 38, 5, 5, 8);
-  px(g, p.fur, 39, 6, 3, 6);
-  px(g, p.eye, 37, 16, 2, 2);
-  px(g, '#fff', 37, 16, 1, 1);
-  // snout
-  px(g, p.o, 40, 19, 8, 9);
-  px(g, p.fur, 41, 20, 6, 6);
-  px(g, p.o, 45, 22, 2, 2);
-  px(g, p.belly, 41, 26, 5, 1);
-  px(g, '#fff', 42, 25, 1, 2);
-  px(g, '#fff', 44, 25, 1, 2);
+  px(g, p.o, 36, 10, 10, 15);
+  px(g, p.fur, 37, 11, 8, 12);
+  px(g, p.fur2, 37, 20, 8, 3);
+
+  // pointed ears
+  px(g, p.o, 35, 7, 5, 5);
+  px(g, p.o, 36, 4, 3, 4);
+  px(g, p.fur, 36, 8, 3, 3);
+  px(g, p.fur, 37, 5, 1, 3);
+  px(g, p.fur2, 36, 10, 3, 1);
+  px(g, p.o, 41, 7, 5, 5);
+  px(g, p.o, 42, 4, 3, 4);
+  px(g, p.fur, 42, 8, 3, 3);
+  px(g, p.fur, 43, 5, 1, 3);
+  px(g, p.fur2, 42, 10, 3, 1);
+
+  // eye and brow
+  px(g, p.fur2, 38, 14, 3, 1);
+  px(g, p.eye, 40, 15, 2, 2);
+  px(g, '#fff', 40, 15, 1, 1);
+
+  // long snout
+  px(g, p.o, 43, 18, 5, 8);
+  px(g, p.fur, 44, 19, 3, 6);
+  px(g, p.belly, 44, 23, 3, 2);
+  px(g, p.o, 46, 20, 2, 2);
+  px(g, '#fff', 44, 24, 1, 1);
+  px(g, p.fur2, 43, 18, 2, 1);
+
   // scars
-  px(g, p.fur2, 34, 19, 3, 1);
+  px(g, p.fur2, 38, 17, 3, 1);
+  g.restore();
 }
 
 function drawGolem(g) {
@@ -351,20 +384,26 @@ export function drawEnemy(g, id, x, y, scale = 6, time = 0, opts = {}) {
   if (HUMANOID_ENEMIES.has(id)) {
     const map = { bandit:'bandit', guard:'guard', jailer:'jailer', champion:'champion', darkknight:'darkknight', dorian:'dorian' };
     const cs = Math.round(scale * 1.35);
-    drawCharacter(g, map[id], x, y + bob, 'right', 0, cs, opts);
+    // Enemies stand on the right and face the party on the left.
+    drawCharacter(g, map[id], x, y + bob, 'left', 0, cs, opts);
     return;
   }
   const spr = opts.flash ? getSil(id) : getEnemySprite(id);
   const w = W * scale, h = H * scale;
-  const dx = Math.round(x - w / 2), dy = Math.round(y - h + bob);
+  const dy = Math.round(y - h + bob);
+  // Mirror the sprite around its anchor so wolves and beasts also face the party.
+  g.save();
+  g.translate(x, 0);
+  g.scale(-1, 1);
   if (opts.alpha != null) g.globalAlpha = opts.alpha;
-  g.drawImage(spr, dx, dy, w, h);
+  g.drawImage(spr, -w / 2, dy, w, h);
   if (opts.flash) {
     g.globalCompositeOperation = 'lighter';
     g.globalAlpha = (opts.alpha ?? 1) * 0.7;
-    g.drawImage(spr, dx, dy, w, h);
+    g.drawImage(spr, -w / 2, dy, w, h);
     g.globalCompositeOperation = 'source-over';
   }
+  g.restore();
   g.globalAlpha = 1;
 }
 

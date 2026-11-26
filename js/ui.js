@@ -9,6 +9,7 @@ const $ = (sel) => document.querySelector(sel);
 const SPEAKER_SPRITE = {
   'Kael': 'kael', 'Lyra': 'lyra', 'Dorian': 'dorian', 'Garrick': 'garrick', 'Mira': 'mira',
   'Anciã Maeve': 'elder', 'Maeve': 'elder', 'Tolan': 'merchant', 'Pip': 'child',
+  'Haldor': 'villager1', 'Ferreira Anka': 'villager3',
   'Brann': 'resistance', 'Sir Varek': 'champion', 'Varek': 'champion',
   'Guarda': 'guard', 'Guarda Real': 'guard', 'Carcereiro Groth': 'jailer',
   'Narrador': null, '???': null,
@@ -189,6 +190,7 @@ class UI {
     if (this.dialogueOpen) await wait(120);
     this.dialogueOpen = true;
     this.dialogue.classList.remove('hidden');
+    this.hudParty.classList.add('dialogue-on');
     this.advance.classList.remove('on');
     this.speaker.textContent = speaker || '';
     this.speaker.style.display = speaker ? '' : 'none';
@@ -212,6 +214,7 @@ class UI {
         Input.pop(handler);
         this.dialogue.onclick = null;
         this.dialogue.classList.add('hidden');
+        this.hudParty.classList.remove('dialogue-on');
         this.advance.classList.remove('on');
         this.dialogueOpen = false;
         audio.sfx('cursor');

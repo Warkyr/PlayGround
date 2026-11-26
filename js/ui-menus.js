@@ -2,13 +2,15 @@
 import { Input, clamp } from './util.js';
 import { audio } from './audio.js';
 import { ui } from './ui.js';
-import { ITEMS, SKILLS, STATUS_INFO } from './data.js';
+import {
+  ITEMS, SKILLS, STATUS_INFO, WEAPONS, weaponBonusText, equipWeapon,
+} from './data.js';
 
 const bar = (cls, pct) => `<div class="bar ${cls}"><i style="width:${clamp(pct, 0, 1) * 100}%"></i></div>`;
 
 function statusHTML(game) {
   return `<div class="stat-grid">${game.party.map((m) => {
-    const allSkills = (game.chars?.[m.id]?.skills) || [];
+    const wpn = WEAPONS[m.weapon];
     return `<div class="stat-card">
       <div class="sc-head">
         <div><div class="sc-name">${m.name}</div><div class="sc-role">${m.role}</div></div>
@@ -25,6 +27,10 @@ function statusHTML(game) {
         <div class="stat-attr">RES<b>${m.res}</b></div>
         <div class="stat-attr">VEL<b>${m.spd}</b></div>
         <div class="stat-attr">SOR<b>${m.lck}</b></div>
+      </div>
+      <div class="sc-weapon">
+        <span>${wpn ? `${wpn.icon} ${wpn.name}` : 'Sem arma'}</span>
+        <b>${weaponBonusText(wpn)}</b>
       </div>
       <div class="sc-skills">${m.skills.map((sid) => `<span class="skill-tag">${SKILLS[sid]?.name || sid}</span>`).join('')}</div>
     </div>`;
@@ -317,9 +323,17 @@ export async function shopMenu(game, stock, title = 'Mercador') {
     const rows = [...content.querySelectorAll('[data-shop]')];
     rows.forEach((row, i) => {
       row.classList.toggle('sel', i === sel);
-      row.addEventListener('mouseenter', () => { sel = i; render(); });
+      row.addEventListener('mouseenter', () => {
+        if (sel === i) return;
+        sel = i;
+        paint();
+        audio.sfx('cursor');
+      });
       row.addEventListener('click', () => buy(row.dataset.shop));
     });
+  };
+  const paint = () => {
+    content.querySelectorAll('[data-shop]').forEach((row, i) => row.classList.toggle('sel', i === sel));
   };
   let sel = 0;
   let resolve;
@@ -342,6 +356,119 @@ export async function shopMenu(game, stock, title = 'Mercador') {
     if (a === 'cancel') { finish(); return true; }
     return true;
   };
+  ui.openScreen(content, { dim: true });
+  Input.push(handler);
+  render();
+  return done;
+}
+
+// Dedicated smith screen. Buying a weapon equips it immediately, so the
+// player always sees the new ATQ/MAG on the status tab without a second
+// equipment menu. Hover only repaints selection (never rebuilds the list),
+// avoiding the mouseenter loop that a full render-on-hover can cause.
+export async function weaponShopMenu(game, stock, title = 'Ferreiro') {
+  const content = document.createElement('div');
+  content.className = 'screen weapon-shop';
+  const ids = stock.filter((id) => {
+    const w = WEAPONS[id];
+    return w && game.party.some((m) => m.id === w.user);
+  });
+  let sel = 0;
+  let resolve;
+  const done = new Promise((r) => { resolve = r; });
+  const finish = () => {
+    Input.pop(handler);
+    ui.closeScreen();
+    audio.sfx('cancel');
+    resolve();
+  };
+  const ownerOf = (w) => game.party.find((m) => m.id === w.user);
+  const isOwned = (id) => !!game.weapons?.[id];
+  const isEquipped = (id) => ownerOf(WEAPONS[id])?.weapon === id;
+
+  const render = () => {
+    content.innerHTML = `
+      <div class="screen-head">
+        <div class="screen-title">${title}</div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <span style="font-size:19px;color:var(--gold)">◈ ${game.gold}</span>
+          <button class="screen-close">Sair</button>
+        </div>
+      </div>
+      <div class="screen-body">
+        <p style="font-size:17px;color:var(--muted);margin:0 0 12px">"Aço bom não faz o herói. Mas evita que ele morra antes de virar um."</p>
+        <div class="item-list" id="weapon-list">
+          ${ids.length ? ids.map((id, i) => {
+            const w = WEAPONS[id];
+            const owner = ownerOf(w);
+            const owned = isOwned(id);
+            const equipped = isEquipped(id);
+            const affordable = game.gold >= w.price;
+            const status = equipped ? 'Equipado' : owned ? 'Equipar' : affordable ? 'Comprar' : 'Sem ouro';
+            const price = equipped ? 'EM USO' : owned ? 'NA MOCHILA' : `◈ ${w.price}`;
+            return `<div class="item-row clickable weapon-row ${i === sel ? 'sel' : ''} ${!owned && !affordable ? 'locked' : ''}" data-shop="${id}" data-i="${i}">
+              <div class="item-ico">${w.icon}</div>
+              <div class="item-name">${w.name}<small>${w.desc}</small><span class="weapon-stat">${owner?.name || w.user} · ${weaponBonusText(w)}</span></div>
+              <div class="item-qty">${price}</div>
+              <div class="item-use">${status}</div>
+            </div>`;
+          }).join('') : '<div class="key-note">Nenhuma arma disponível para o seu grupo.</div>'}
+        </div>
+        <div style="margin-top:14px;font-size:15px;color:var(--muted)">↑↓ escolher · Enter comprar/equipar · Esc sair</div>
+      </div>`;
+    content.querySelector('.screen-close').addEventListener('click', finish);
+    content.querySelectorAll('[data-shop]').forEach((row, i) => {
+      row.addEventListener('mouseenter', () => {
+        if (sel === i) return;
+        sel = i;
+        paint();
+        audio.sfx('cursor');
+      });
+      row.addEventListener('click', () => choose(row.dataset.shop));
+    });
+  };
+
+  const paint = () => {
+    content.querySelectorAll('[data-shop]').forEach((row, i) => row.classList.toggle('sel', i === sel));
+  };
+
+  const choose = (id) => {
+    const w = WEAPONS[id];
+    if (!w) return;
+    const owner = ownerOf(w);
+    if (!owner) { ui.toast('Esse aliado ainda não está no grupo.', 'red', '✦'); return; }
+    if (isOwned(id)) {
+      if (isEquipped(id)) { audio.sfx('cancel'); return; }
+      equipWeapon(owner, id);
+      audio.sfx('confirm');
+      ui.toast(`${owner.name} equipou ${w.name}.`, 'gold', w.icon);
+      ui.updateHUD(game);
+      render();
+      return;
+    }
+    if (game.gold < w.price) {
+      audio.sfx('cancel');
+      ui.toast('Ouro insuficiente.', 'red', '◈');
+      return;
+    }
+    game.gold -= w.price;
+    if (!game.weapons) game.weapons = {};
+    game.weapons[id] = true;
+    equipWeapon(owner, id);
+    audio.sfx('chest');
+    ui.toast(`${owner.name} equipou ${w.name}.`, 'gold', w.icon);
+    ui.updateHUD(game);
+    render();
+  };
+
+  const handler = (a) => {
+    if (a === 'up') { sel = (sel - 1 + Math.max(1, ids.length)) % Math.max(1, ids.length); paint(); audio.sfx('cursor'); return true; }
+    if (a === 'down') { sel = (sel + 1) % Math.max(1, ids.length); paint(); audio.sfx('cursor'); return true; }
+    if (a === 'confirm') { if (ids[sel]) choose(ids[sel]); return true; }
+    if (a === 'cancel') { finish(); return true; }
+    return true;
+  };
+
   ui.openScreen(content, { dim: true });
   Input.push(handler);
   render();

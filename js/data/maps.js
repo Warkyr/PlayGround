@@ -77,7 +77,7 @@ export const VILLAGE = {
     { id: 'merchant', sprite: 'merchant', x: 18, y: 12, dir: 'down', name: 'Tolan', talk: 'merchant_village' },
     { id: 'child', sprite: 'child', x: 19, y: 14, dir: 'left', name: 'Pip', talk: 'child_village', wander: 2 },
     { id: 'garrick', sprite: 'garrick', x: 8, y: 13, dir: 'right', name: 'Garrick', talk: 'garrick_village' },
-    { id: 'villager1', sprite: 'villager1', x: 12, y: 15, dir: 'up', name: 'Ferreiro', talk: 'villager_village', wander: 1 },
+    { id: 'blacksmith', sprite: 'villager1', x: 12, y: 15, dir: 'up', name: 'Haldor', talk: 'blacksmith_village' },
     { id: 'villager2', sprite: 'villager2', x: 23, y: 12, dir: 'left', name: 'Lavadeira', talk: 'villager_village', wander: 1 },
     { id: 'guard', sprite: 'guard', x: 16, y: 2, dir: 'down', name: 'Guarda', talk: 'guard_gate' },
   ],
@@ -269,6 +269,7 @@ export const VILLAGE_NIGHT = {
   npcs: [
     { id: 'elder', sprite: 'elder', x: 8, y: 16, dir: 'right', name: 'Anciã Maeve', talk: 'night_elder' },
     { id: 'resistance', sprite: 'resistance', x: 6, y: 16, dir: 'right', name: 'Brann', talk: 'night_resistance' },
+    { id: 'smith', sprite: 'villager3', x: 13, y: 14, dir: 'left', name: 'Ferreira Anka', talk: 'blacksmith_night' },
     { id: 'guard1', sprite: 'guard', x: 12, y: 10, dir: 'down', name: 'Guarda Ocupante', talk: 'night_guard', when: (g) => !g.flags.nightGuardDown },
     { id: 'guard2', sprite: 'guard', x: 18, y: 14, dir: 'left', name: 'Guarda Ocupante', talk: 'night_guard', when: (g) => !g.flags.nightGuardDown },
     { id: 'varek', sprite: 'champion', x: 19, y: 9, dir: 'down', name: 'Sir Varek', talk: 'night_varek', when: (g) => g.flags.talkedResistance && !g.flags.varekDown },
