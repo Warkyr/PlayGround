@@ -83,6 +83,13 @@ class UI {
     $('#touch-a').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.unlock(); Input.dispatch('confirm'); });
     $('#touch-b').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.unlock(); Input.dispatch('cancel'); });
     $('#hud-mute').addEventListener('click', () => { audio.unlock(); const m = audio.toggleMuted(); this.updateMuteIcon(m); });
+    $('#hud-menu').addEventListener('click', (e) => {
+      e.preventDefault();
+      audio.unlock();
+      // Blur so a later Space/Enter doesn't re-trigger this button.
+      e.currentTarget.blur();
+      Input.dispatch('menu');
+    });
     this.updateMuteIcon(audio.muted);
 
     const hint = $('#rotate-hint');
