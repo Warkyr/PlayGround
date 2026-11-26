@@ -327,12 +327,13 @@ class UI {
     const act = card.querySelector('.modal-actions');
     const list = actions || [{ label: 'Continuar', value: 'ok', primary: true }];
     let sel = 0;
+    let finish = null;
     const btns = list.map((a, i) => {
       const b = document.createElement('button');
       b.className = 'btn' + (a.primary ? ' primary' : '');
       b.textContent = a.label;
       b.addEventListener('mouseenter', () => setSel(i));
-      b.addEventListener('click', () => finish(a.value));
+      b.addEventListener('click', () => { if (finish) finish(a.value); });
       act.appendChild(b);
       return b;
     });
@@ -340,7 +341,7 @@ class UI {
     setSel(0);
     this.openScreen(card, { dim: true });
     return await new Promise((resolve) => {
-      const finish = (v) => {
+      finish = (v) => {
         Input.pop(handler);
         this.closeScreen();
         audio.sfx('confirm');

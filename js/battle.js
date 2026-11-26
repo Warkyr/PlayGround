@@ -29,7 +29,7 @@ function makeEnemy(id, index, scale = 1) {
     spd: d.spd, lck: d.lck,
     xp: d.xp, gold: d.gold, weak: d.weak || [], resist: d.resist || [],
     skills: [...(d.skills || [])], boss: !!d.boss, accent: d.accent,
-    scaleBase: d.scale || 5, status: {}, buffs: [], defending: false,
+    scaleBase: d.scale || 5, size: d.size || 1, status: {}, buffs: [], defending: false,
     anim: null, flashT: 0, deadT: 0, bobPhase: index * 1.7,
     x: 0, y: 0, scale: d.scale || 5,
   };
