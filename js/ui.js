@@ -83,13 +83,6 @@ class UI {
     $('#touch-a').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.unlock(); Input.dispatch('confirm'); });
     $('#touch-b').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.unlock(); Input.dispatch('cancel'); });
     $('#hud-mute').addEventListener('click', () => { audio.unlock(); const m = audio.toggleMuted(); this.updateMuteIcon(m); });
-    $('#hud-menu').addEventListener('click', (e) => {
-      e.preventDefault();
-      audio.unlock();
-      // Blur so a later Space/Enter doesn't re-trigger this button.
-      e.currentTarget.blur();
-      Input.dispatch('menu');
-    });
     this.updateMuteIcon(audio.muted);
 
     const hint = $('#rotate-hint');
@@ -267,23 +260,13 @@ class UI {
     list.className = 'choice-list';
     let sel = 0;
     const opts = options.map((o) => typeof o === 'string' ? { label: o, value: o } : o);
-    const buttons = opts.map((o, i) => {
-      const b = document.createElement('button');
-      b.className = 'choice-btn' + (i === 0 ? ' sel' : '');
-      b.innerHTML = `<span class="arrow">▶</span><span>${o.label}</span>`;
-      b.addEventListener('mouseenter', () => setSel(i));
-      b.addEventListener('click', () => choose(i));
-      list.appendChild(b);
-      return b;
-    });
-    card.appendChild(list);
-    this.choiceLayer.appendChild(card);
-    const setSel = (i) => {
-      sel = (i + opts.length) % opts.length;
-      buttons.forEach((b, j) => b.classList.toggle('sel', j === sel));
-      audio.sfx('cursor');
-    };
     return await new Promise((resolve) => {
+      const buttons = [];
+      const setSel = (i) => {
+        sel = (i + opts.length) % opts.length;
+        buttons.forEach((b, j) => b.classList.toggle('sel', j === sel));
+        audio.sfx('cursor');
+      };
       const finish = (i) => {
         Input.pop(handler);
         this.choiceLayer.classList.remove('on');
@@ -300,6 +283,17 @@ class UI {
         if (action === 'cancel') { finish(-1); return true; }
         return true;
       };
+      opts.forEach((o, i) => {
+        const b = document.createElement('button');
+        b.className = 'choice-btn' + (i === 0 ? ' sel' : '');
+        b.innerHTML = `<span class="arrow">▶</span><span>${o.label}</span>`;
+        b.addEventListener('mouseenter', () => setSel(i));
+        b.addEventListener('click', () => choose(i));
+        list.appendChild(b);
+        buttons.push(b);
+      });
+      card.appendChild(list);
+      this.choiceLayer.appendChild(card);
       Input.push(handler);
     });
   }
@@ -333,26 +327,18 @@ class UI {
       <div class="modal-actions"></div>`;
     const act = card.querySelector('.modal-actions');
     const list = actions || [{ label: 'Continuar', value: 'ok', primary: true }];
-    let sel = 0;
-    let finish = null;
-    const btns = list.map((a, i) => {
-      const b = document.createElement('button');
-      b.className = 'btn' + (a.primary ? ' primary' : '');
-      b.textContent = a.label;
-      b.addEventListener('mouseenter', () => setSel(i));
-      b.addEventListener('click', () => { if (finish) finish(a.value); });
-      act.appendChild(b);
-      return b;
-    });
-    const setSel = (i) => { sel = i; btns.forEach((b, j) => b.style.outline = j === sel ? '2px solid rgba(231,199,123,.7)' : ''); };
-    setSel(0);
-    this.openScreen(card, { dim: true });
     return await new Promise((resolve) => {
-      finish = (v) => {
+      let sel = 0;
+      const btns = [];
+      const finish = (v) => {
         Input.pop(handler);
         this.closeScreen();
         audio.sfx('confirm');
         resolve(v);
+      };
+      const setSel = (i) => {
+        sel = i;
+        btns.forEach((b, j) => b.style.outline = j === sel ? '2px solid rgba(231,199,123,.7)' : '');
       };
       const handler = (action) => {
         if (action === 'left') { setSel((sel - 1 + btns.length) % btns.length); return true; }
@@ -365,6 +351,17 @@ class UI {
         }
         return true;
       };
+      list.forEach((a, i) => {
+        const b = document.createElement('button');
+        b.className = 'btn' + (a.primary ? ' primary' : '');
+        b.textContent = a.label;
+        b.addEventListener('mouseenter', () => setSel(i));
+        b.addEventListener('click', () => finish(a.value));
+        act.appendChild(b);
+        btns.push(b);
+      });
+      setSel(0);
+      this.openScreen(card, { dim: true });
       Input.push(handler);
     });
   }
@@ -535,7 +532,6 @@ class UI {
         <h3>Lâmina do Amanhecer</h3>
         <p>Uma história de traição, cinzas e recomeço.</p>
         <div class="credits-grid">
-          <div class="cred"><b>Criação</b><span>Wark</span></div>
           <div class="cred"><b>Direção & Roteiro</b><span>Estúdio Aurora</span></div>
           <div class="cred"><b>Design de Jogo</b><span>Estúdio Aurora</span></div>
           <div class="cred"><b>Arte & Pixel Art</b><span>Gerada proceduralmente em canvas</span></div>

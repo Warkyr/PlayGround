@@ -43,7 +43,7 @@ let encounterSteps = 0;
 let stepSound = 0;
 
 // ------------------------------------------------------------------ utilities
-function block(key) { blockers.add(key); if (player) player.walkGrace = 0; }
+function block(key) { blockers.add(key); }
 function unblock(key) { blockers.delete(key); }
 function isBusy() { return blockers.size > 0; }
 
@@ -180,7 +180,7 @@ function setMap(id, x, y, dir = 'up') {
   player = {
     x, y, dir,
     fromX: x, fromY: y,
-    moving: false, t: 1, frame: 0, walkPhase: 0, walkGrace: 0,
+    moving: false, t: 1, frame: 0, walkPhase: 0,
   };
   groundCanvas = renderGround(map);
   ambientType = map.ambient || 'dust';
@@ -285,21 +285,17 @@ function updateExplore(dt) {
   if (player.bump > 0) player.bump = Math.max(0, player.bump - dt);
   if (player.moving) {
     player.t += dt / STEP_TIME;
-    // Continuous cycle across tiles: two poses per step, three walking poses.
-    player.walkPhase = (player.walkPhase || 0) + dt / STEP_TIME;
+    // Continuous walk clock: keeps the 4-frame cycle flowing across tiles
+    // instead of restarting it on every step.
+    player.walkPhase += dt;
     if (player.t >= 1) {
       player.t = 1;
       player.moving = false;
-      player.walkGrace = 0.07;
       player.fromX = player.x;
       player.fromY = player.y;
       onStepComplete();
     }
     return;
-  }
-  if (player.walkGrace > 0) {
-    player.walkGrace = Math.max(0, player.walkGrace - dt);
-    player.walkPhase = (player.walkPhase || 0) + dt / STEP_TIME * 0.9;
   }
   let dir = null;
   if (Input.isDown('up')) dir = 'up';
@@ -309,6 +305,8 @@ function updateExplore(dt) {
   if (dir) {
     player.dir = dir;
     tryMove(dir);
+  } else {
+    player.walkPhase = 0;
   }
 }
 
@@ -556,8 +554,12 @@ function drawWorld() {
   }
 
   const pp2 = playerPixel();
-  const walking = player.moving || (player.walkGrace || 0) > 0;
-  const walkingFrame = walking ? 1 + (Math.floor((player.walkPhase || 0) * 2) % 3) : 0;
+  // 4-frame cycle mapped to [contact L, passing, contact R, passing].
+  // A 92ms cadence stays smooth on slower devices and still matches the step.
+  const WALK_FRAMES = [1, 2, 3, 2];
+  const walkingFrame = player.moving
+    ? WALK_FRAMES[Math.floor(player.walkPhase / 0.092) % WALK_FRAMES.length]
+    : 0;
   drawables.push({
     y: pp2.y,
     draw: () => drawCharacter(g, 'kael', pp2.x, pp2.y, player.dir, walkingFrame, 1, { alpha: 1 }),
@@ -711,9 +713,9 @@ window.__lamina = {
   get mode() { return mode; },
   get player() { return player; },
   get map() { return currentMap; },
-  get battle() { return getActiveBattle(); },
   get blockers() { return [...blockers]; },
   get input() { return Input; },
+  get battle() { return getActiveBattle(); },
   newGame, loadGame, saveGame, readSave,
   gotoMap, runBattle, runStory, storyCtx,
 };
