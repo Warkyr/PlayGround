@@ -535,6 +535,7 @@ class UI {
         <h3>Lâmina do Amanhecer</h3>
         <p>Uma história de traição, cinzas e recomeço.</p>
         <div class="credits-grid">
+          <div class="cred"><b>Criação</b><span>Wark</span></div>
           <div class="cred"><b>Direção & Roteiro</b><span>Estúdio Aurora</span></div>
           <div class="cred"><b>Design de Jogo</b><span>Estúdio Aurora</span></div>
           <div class="cred"><b>Arte & Pixel Art</b><span>Gerada proceduralmente em canvas</span></div>
