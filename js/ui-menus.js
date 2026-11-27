@@ -119,10 +119,31 @@ export async function pauseMenu(game, actions = {}) {
     });
   };
 
+  // Repaint selection in place. Rebuilding the list on mouseenter detached the
+  // row under the pointer and could swallow the click that followed.
+  const paintContentSelection = () => {
+    const rows = [...contentEl.querySelectorAll('.item-row.clickable')];
+    rows.forEach((row, i) => row.classList.toggle('sel', focus === 'content' && i === contentIndex));
+    renderNav();
+  };
+
+  // Keep the keyboard selection on screen when the panel is scrollable (short
+  // landscape phones, small windows).
+  const scrollContentSelection = () => {
+    const rows = [...contentEl.querySelectorAll('.item-row.clickable')];
+    rows[contentIndex]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+
   const useItem = async (id) => {
     const it = ITEMS[id];
     if (!it || it.key) { ui.toast('Um item de história. Não pode ser usado aqui.', '', '✦'); return; }
     if (!game.inventory[id]) return;
+    // Bombs and smoke bombs only have a battle effect. Consuming them from the
+    // pause menu used to silently waste the item, so explain and keep it.
+    if (!it.heal && !it.mp && !it.cure && !it.full) {
+      ui.toast('Este item só pode ser usado em batalha.', '', it.icon || '◈');
+      return;
+    }
     let target = null;
     if (it.target === 'ally') {
       const options = game.party.map((m) => ({ label: `${m.name}  (${m.hp}/${m.maxHp} HP)`, value: m.id }));
@@ -130,6 +151,7 @@ export async function pauseMenu(game, actions = {}) {
       if (pick == null) return;
       target = game.party.find((m) => m.id === pick);
     }
+    if (!target) return;
     if (it.heal) {
       if (target.hp >= target.maxHp) { ui.toast(`${target.name} já está com HP cheio.`, '', '♥'); return; }
       target.hp = Math.min(target.maxHp, target.hp + it.heal);
@@ -168,7 +190,10 @@ export async function pauseMenu(game, actions = {}) {
       const rows = [...contentEl.querySelectorAll('.item-row.clickable')];
       rows.forEach((row, i) => {
         row.classList.toggle('sel', focus === 'content' && i === contentIndex);
-        row.addEventListener('mouseenter', () => { contentIndex = i; focus = 'content'; renderContent(); });
+        row.addEventListener('mousemove', () => {
+          if (focus === 'content' && contentIndex === i) return;
+          contentIndex = i; focus = 'content'; paintContentSelection();
+        });
         row.addEventListener('click', () => { contentIndex = i; focus = 'content'; useItem(row.dataset.item); });
         contentActions.push({ type: 'item', id: row.dataset.item });
       });
@@ -186,7 +211,10 @@ export async function pauseMenu(game, actions = {}) {
         </div>`;
       const row = contentEl.querySelector('#save-row');
       row.classList.toggle('sel', focus === 'content');
-      row.addEventListener('mouseenter', () => { focus = 'content'; renderContent(); });
+      row.addEventListener('mousemove', () => {
+        if (focus === 'content') return;
+        focus = 'content'; contentIndex = 0; paintContentSelection();
+      });
       row.addEventListener('click', doSave);
       contentActions.push({ type: 'save' });
     } else if (tab === 'system') {
@@ -199,7 +227,10 @@ export async function pauseMenu(game, actions = {}) {
       const rows = [...contentEl.querySelectorAll('[data-sys]')];
       rows.forEach((row, i) => {
         row.classList.toggle('sel', focus === 'content' && i === contentIndex);
-        row.addEventListener('mouseenter', () => { contentIndex = i; focus = 'content'; renderContent(); });
+        row.addEventListener('mousemove', () => {
+          if (focus === 'content' && contentIndex === i) return;
+          contentIndex = i; focus = 'content'; paintContentSelection();
+        });
         row.addEventListener('click', () => sysAction(row.dataset.sys));
         contentActions.push({ type: 'sys', id: row.dataset.sys });
       });
@@ -266,8 +297,17 @@ export async function pauseMenu(game, actions = {}) {
       return true;
     }
     // content focus
-    if (a === 'up') { contentIndex = Math.max(0, contentIndex - 1); renderContent(); return true; }
-    if (a === 'down') { contentIndex = Math.min(contentActions.length - 1, contentIndex + 1); renderContent(); return true; }
+    if (a === 'up' || a === 'down') {
+      if (!contentActions.length) return true;
+      contentIndex = a === 'up'
+        ? Math.max(0, contentIndex - 1)
+        : Math.min(contentActions.length - 1, contentIndex + 1);
+      // Only repaint: rebuilding would let a stationary pointer's mouseenter
+      // snap the selection back to the row under the cursor.
+      paintContentSelection();
+      scrollContentSelection();
+      return true;
+    }
     if (a === 'cancel' || a === 'left') { focus = 'nav'; renderContent(); return true; }
     if (a === 'confirm') {
       const act = contentActions[contentIndex];
@@ -323,7 +363,7 @@ export async function shopMenu(game, stock, title = 'Mercador') {
     const rows = [...content.querySelectorAll('[data-shop]')];
     rows.forEach((row, i) => {
       row.classList.toggle('sel', i === sel);
-      row.addEventListener('mouseenter', () => {
+      row.addEventListener('mousemove', () => {
         if (sel === i) return;
         sel = i;
         paint();
@@ -334,6 +374,9 @@ export async function shopMenu(game, stock, title = 'Mercador') {
   };
   const paint = () => {
     content.querySelectorAll('[data-shop]').forEach((row, i) => row.classList.toggle('sel', i === sel));
+  };
+  const scrollSelected = () => {
+    content.querySelectorAll('[data-shop]')[sel]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
   let sel = 0;
   let resolve;
@@ -348,10 +391,11 @@ export async function shopMenu(game, stock, title = 'Mercador') {
     ui.toast(`Comprou ${it.name}.`, 'gold', it.icon || '◈');
     ui.updateHUD(game);
     render();
+    scrollSelected();
   };
   const handler = (a) => {
-    if (a === 'up') { sel = Math.max(0, sel - 1); render(); return true; }
-    if (a === 'down') { sel = Math.min(stock.length - 1, sel + 1); render(); return true; }
+    if (a === 'up') { sel = Math.max(0, sel - 1); paint(); scrollSelected(); audio.sfx('cursor'); return true; }
+    if (a === 'down') { sel = Math.min(stock.length - 1, sel + 1); paint(); scrollSelected(); audio.sfx('cursor'); return true; }
     if (a === 'confirm') { buy(stock[sel]); return true; }
     if (a === 'cancel') { finish(); return true; }
     return true;
@@ -418,7 +462,7 @@ export async function weaponShopMenu(game, stock, title = 'Ferreiro') {
       </div>`;
     content.querySelector('.screen-close').addEventListener('click', finish);
     content.querySelectorAll('[data-shop]').forEach((row, i) => {
-      row.addEventListener('mouseenter', () => {
+      row.addEventListener('mousemove', () => {
         if (sel === i) return;
         sel = i;
         paint();
@@ -430,6 +474,10 @@ export async function weaponShopMenu(game, stock, title = 'Ferreiro') {
 
   const paint = () => {
     content.querySelectorAll('[data-shop]').forEach((row, i) => row.classList.toggle('sel', i === sel));
+  };
+
+  const scrollSelected = () => {
+    content.querySelectorAll('[data-shop]')[sel]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
 
   const choose = (id) => {
@@ -444,6 +492,7 @@ export async function weaponShopMenu(game, stock, title = 'Ferreiro') {
       ui.toast(`${owner.name} equipou ${w.name}.`, 'gold', w.icon);
       ui.updateHUD(game);
       render();
+      scrollSelected();
       return;
     }
     if (game.gold < w.price) {
@@ -459,11 +508,12 @@ export async function weaponShopMenu(game, stock, title = 'Ferreiro') {
     ui.toast(`${owner.name} equipou ${w.name}.`, 'gold', w.icon);
     ui.updateHUD(game);
     render();
+    scrollSelected();
   };
 
   const handler = (a) => {
-    if (a === 'up') { sel = (sel - 1 + Math.max(1, ids.length)) % Math.max(1, ids.length); paint(); audio.sfx('cursor'); return true; }
-    if (a === 'down') { sel = (sel + 1) % Math.max(1, ids.length); paint(); audio.sfx('cursor'); return true; }
+    if (a === 'up') { sel = (sel - 1 + Math.max(1, ids.length)) % Math.max(1, ids.length); paint(); scrollSelected(); audio.sfx('cursor'); return true; }
+    if (a === 'down') { sel = (sel + 1) % Math.max(1, ids.length); paint(); scrollSelected(); audio.sfx('cursor'); return true; }
     if (a === 'confirm') { if (ids[sel]) choose(ids[sel]); return true; }
     if (a === 'cancel') { finish(); return true; }
     return true;

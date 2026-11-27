@@ -156,7 +156,7 @@ button{font-family:inherit;color:inherit;}
 @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(4px);}}
 
 /* ============ Choices ============ */
-#choice-layer{position:absolute;inset:0;display:none;place-items:center;pointer-events:auto;z-index:40;
+#choice-layer{position:absolute;inset:0;display:none;place-items:center;pointer-events:auto;z-index:58;
   background:rgba(2,4,10,.35);backdrop-filter:blur(1.5px);}
 #choice-layer.on{display:grid;}
 .choice-card{
@@ -299,11 +299,11 @@ button{font-family:inherit;color:inherit;}
 /* ============ Full screens ============ */
 #screen-layer{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  pointer-events:auto;z-index:50;overflow:auto;padding:24px;
+  pointer-events:auto;z-index:50;overflow:hidden;padding:24px;
 }
 #screen-layer.dim{background:rgba(2,4,10,.78);backdrop-filter:blur(3px);}
 .screen{
-  width:min(1000px,94vw);max-height:92vh;display:flex;flex-direction:column;
+  width:min(1000px,94vw);height:min(820px,calc(100vh - 48px));max-height:92vh;display:flex;flex-direction:column;
   background:linear-gradient(160deg,rgba(17,28,50,.98),rgba(7,12,23,.99));
   border:2px solid var(--gold-dim);box-shadow:var(--shadow);position:relative;
 }
@@ -312,7 +312,8 @@ button{font-family:inherit;color:inherit;}
 .screen-title{font-family:var(--pixel);font-size:13px;color:var(--gold);letter-spacing:2px;text-transform:uppercase;}
 .screen-close{background:none;border:1px solid rgba(231,199,123,.3);color:var(--gold);cursor:pointer;padding:7px 11px;font-size:16px;line-height:1;pointer-events:auto;}
 .screen-close:hover{background:rgba(231,199,123,.12);}
-.screen-body{padding:20px 22px 24px;overflow:auto;}
+.screen-head{flex:0 0 auto;}
+.screen-body{flex:1 1 auto;min-height:0;padding:20px 22px 24px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 
 /* title */
 #screen-layer.title-layer{padding:0;background:transparent;}
@@ -543,7 +544,8 @@ button{font-family:inherit;color:inherit;}
   .pnav-btn .ico{display:none;}
   .pause-content{max-height:56vh;padding:14px;}
   .stat-attrs{grid-template-columns:repeat(2,1fr);}
-  .screen-body{padding:14px 15px 18px;}
+  .screen-body{padding:10px 15px 12px;}
+  .screen-head{padding:10px 15px;}
   .item-row{grid-template-columns:22px 1fr auto;gap:7px;padding:7px 9px;}
   .item-name{font-size:16px;}
   .item-use{grid-column:2/-1;justify-self:end;}

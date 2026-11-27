@@ -47,6 +47,12 @@ let stepSound = 0;
 function block(key) { blockers.add(key); }
 function unblock(key) { blockers.delete(key); }
 function isBusy() { return blockers.size > 0; }
+// Touch controls are only useful on coarse pointers or narrow screens. This is
+// reused after battle because hiding them there must not make them reappear on
+// a desktop keyboard/mouse session.
+function wantsTouchControls() {
+  return window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 820;
+}
 
 function resize() {
   dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -487,7 +493,7 @@ async function runBattle(ids, opts = {}) {
     if (!sessionEnded) {
       mode = 'explore';
       Input.exploreAction = exploreAction;
-      ui.setTouchVisible(true);
+      ui.setTouchVisible(wantsTouchControls());
       if (currentMap) audio.playMusic(currentMap.bgm || 'field');
       ui.updateHUD(game);
       saveGame(true);
@@ -804,7 +810,7 @@ async function boot() {
 
     mode = 'explore';
     ui.showHUD(true);
-    ui.setTouchVisible(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 820);
+    ui.setTouchVisible(wantsTouchControls());
     ui.updateHUD(game);
     Input.exploreAction = exploreAction;
 
