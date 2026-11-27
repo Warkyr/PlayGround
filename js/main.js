@@ -530,7 +530,10 @@ async function openPause() {
   if (mode !== 'explore' || isBusy()) return;
   block('pause');
   try {
-    const result = await pauseMenu(game, { save: () => saveGame(true) });
+    const result = await pauseMenu(game, {
+      save: () => saveGame(true),
+      player: () => ({ x: player.x, y: player.y, dir: player.dir }),
+    });
     if (result === 'title') endSession('title');
   } finally {
     unblock('pause');

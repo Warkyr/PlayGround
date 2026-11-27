@@ -4,7 +4,9 @@ import { audio } from './audio.js';
 import { ui } from './ui.js';
 import {
   ITEMS, SKILLS, STATUS_INFO, WEAPONS, weaponBonusText, equipWeapon,
+  getMap, getQuestTarget,
 } from './data.js';
+import { drawMinimap } from './minimap.js';
 
 const bar = (cls, pct) => `<div class="bar ${cls}"><i style="width:${clamp(pct, 0, 1) * 100}%"></i></div>`;
 
@@ -76,6 +78,33 @@ function journalHTML(game) {
     </div>`).join('')}</div>`;
 }
 
+function mapHTML(game) {
+  const map = getMap(game.mapId);
+  const target = getQuestTarget(game.quest);
+  const targetHere = target && target.map === map.id;
+  const destination = target ? getMap(target.map) : null;
+  const hint = !target
+    ? 'Sem destino marcado. Explore a área para encontrar o próximo passo.'
+    : targetHere
+      ? `Objetivo neste mapa: ${target.label}.`
+      : `Objetivo em ${destination?.name || target.map}: ${target.label}. Siga para a próxima área.`;
+  return `
+    <div class="quest-banner">
+      <span class="qb-kicker">Missão principal · ${map.name}</span>
+      <b>${game.quest}</b>
+    </div>
+    <div class="minimap-wrap">
+      <canvas id="pause-minimap" aria-label="Minimapa de ${map.name}"></canvas>
+    </div>
+    <div class="minimap-legend">
+      <span><i class="mm-you"></i>Você</span>
+      <span><i class="mm-goal"></i>Objetivo</span>
+      <span><i class="mm-exit"></i>Saída</span>
+      <span><i class="mm-npc"></i>Pessoa</span>
+    </div>
+    <p class="minimap-hint">${hint}</p>`;
+}
+
 export async function pauseMenu(game, actions = {}) {
   const content = document.createElement('div');
   content.className = 'screen pause-screen';
@@ -90,6 +119,7 @@ export async function pauseMenu(game, actions = {}) {
     <div class="pause-layout">
       <nav class="pause-nav">
         <button class="pnav-btn" data-tab="status"><span class="ico">◈</span>Status</button>
+        <button class="pnav-btn" data-tab="map"><span class="ico">◉</span>Mapa</button>
         <button class="pnav-btn" data-tab="items"><span class="ico">✦</span>Itens</button>
         <button class="pnav-btn" data-tab="journal"><span class="ico">✧</span>Diário</button>
         <button class="pnav-btn" data-tab="save"><span class="ico">⚿</span>Salvar</button>
@@ -103,7 +133,7 @@ export async function pauseMenu(game, actions = {}) {
   ui.openScreen(content, { dim: true });
   audio.sfx('confirm');
 
-  const tabs = ['status', 'items', 'journal', 'save', 'system'];
+  const tabs = ['status', 'map', 'items', 'journal', 'save', 'system'];
   let tabIndex = 0;
   let navIndex = 0;
   let contentIndex = 0;
@@ -182,9 +212,29 @@ export async function pauseMenu(game, actions = {}) {
   const renderContent = () => {
     contentActions = [];
     const tab = tabs[tabIndex];
+    contentEl.classList.toggle('map-tab', tab === 'map');
     navBtns.forEach((b, i) => b.classList.toggle('sel', i === tabIndex && focus === 'nav'));
     if (tab === 'status') {
       contentEl.innerHTML = statusHTML(game);
+    } else if (tab === 'map') {
+      contentEl.innerHTML = mapHTML(game);
+      const map = getMap(game.mapId);
+      const canvas = contentEl.querySelector('#pause-minimap');
+      const livePlayer = typeof actions.player === 'function' ? actions.player() : actions.player;
+      drawMinimap(canvas, map, {
+        game,
+        player: livePlayer,
+        target: getQuestTarget(game.quest),
+      });
+      // Fit the minimap into the panel that is actually available. The
+      // remaining space holds the quest banner, legend and hint.
+      const ratio = map.w / map.h;
+      const availH = Math.max(90, contentEl.clientHeight - 96);
+      const maxH = Math.min(260, availH);
+      const maxW = Math.max(120, contentEl.clientWidth - 20);
+      const w = Math.min(maxW, maxH * ratio);
+      canvas.style.width = `${Math.round(w)}px`;
+      canvas.style.height = `${Math.round(w / ratio)}px`;
     } else if (tab === 'items') {
       contentEl.innerHTML = itemsHTML(game);
       const rows = [...contentEl.querySelectorAll('.item-row.clickable')];
@@ -291,7 +341,7 @@ export async function pauseMenu(game, actions = {}) {
         const tab = tabs[tabIndex];
         if (tab === 'save') { focus = 'content'; contentIndex = 0; renderContent(); return true; }
         if (tab === 'items' || tab === 'system') { focus = 'content'; contentIndex = 0; renderContent(); return true; }
-        if (tab === 'status' || tab === 'journal') return true;
+        if (tab === 'status' || tab === 'journal' || tab === 'map') return true;
       }
       if (a === 'cancel') { finish('close'); return true; }
       return true;

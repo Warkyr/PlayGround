@@ -62,10 +62,15 @@ function borderTrees(map, seed, opts = {}) {
 }
 
 // ---------------------------------------------------------------- VILLAGE
+// Brumalva reads as a simple H: one north-south avenue, two cross streets and
+// a central plaza. Flowers are scattered before the roads are cut so the paths
+// stay clean and the route from the spawn to every door is obvious.
 const villageRows = fill(30, 20, '.');
-setRect(villageRows, 9, 9, 12, 5, 'p');
-setRect(villageRows, 14, 2, 2, 17, 'p');
-scatter(villageRows, 34, 7, 30, 20, ',');
+scatter(villageRows, 30, 7, 30, 20, ',');
+setRect(villageRows, 14, 0, 2, 20, 'p');   // main avenue / north gate
+setRect(villageRows, 9, 9, 12, 5, 'p');    // central plaza
+setRect(villageRows, 5, 5, 20, 2, 'p');    // north cross street
+setRect(villageRows, 5, 17, 20, 2, 'p');   // south cross street
 
 export const VILLAGE = {
   id: 'village', name: 'Brumalva', theme: 'village', bgm: 'village', ambient: 'leaves',
@@ -76,7 +81,8 @@ export const VILLAGE = {
     { t: 'fountain', x: 11, y: 10 },
     { t: 'stall', x: 17, y: 10 },
     { t: 'lamp', x: 9, y: 8 }, { t: 'lamp', x: 20, y: 8 }, { t: 'lamp', x: 9, y: 14 }, { t: 'lamp', x: 20, y: 14 },
-    { t: 'sign', x: 12, y: 17, text: 'Praça de Brumalva. Ao norte, o Santuário da Brasa. As casas ao redor estão abertas durante o festival.' },
+    { t: 'sign', x: 11, y: 16, text: 'Praça de Brumalva. Ao norte, o Santuário da Brasa. As casas ao redor estão abertas durante o festival.' },
+    { t: 'sign', x: 17, y: 16, text: 'Rua do Sul. À esquerda: Casa de Kael. À direita: Empório de Tolan. Ao norte: a praça.' },
     { t: 'sign', x: 2, y: 6, text: 'Casa da Anciã Maeve. A porta está aberta — entre e espere, se ela não estiver.' },
     { t: 'sign', x: 27, y: 6, text: 'Ferraria de Haldor. Aço honesto para tempos desonestos.' },
     { t: 'sign', x: 2, y: 13, text: 'Casa de Kael. O teto range, mas é lar.' },
@@ -85,6 +91,8 @@ export const VILLAGE = {
     { t: 'crate', x: 20, y: 12 }, { t: 'barrel', x: 21, y: 12 },
     { t: 'well', x: 25, y: 8 },
     { t: 'bush', x: 2, y: 8 }, { t: 'bush', x: 27, y: 10 }, { t: 'bush', x: 12, y: 6 },
+    // Low fence closes the southern edge without blocking the cross street.
+    ...Array.from({ length: 12 }, (_, i) => ({ t: 'fence', x: 3 + i * 2, y: 19 })),
   ],
   npcs: [
     { id: 'lyra', sprite: 'lyra', x: 16, y: 11, dir: 'down', name: 'Lyra', talk: 'lyra_festival' },
@@ -109,7 +117,7 @@ export const VILLAGE = {
   ],
   onEnter: 'village_intro',
 };
-borderTrees(VILLAGE, 11, { skip: [[12, 0, 6, 2], [12, 18, 6, 2], [4, 18, 4, 2], [22, 18, 4, 2]] });
+borderTrees(VILLAGE, 11, { skip: [[12, 0, 6, 2], [3, 18, 24, 2]] });
 
 // ---------------------------------------------------------------- VILLAGE INTERIORS
 // Every interior shares the same 24x14 shell: a two-tile door at the bottom
@@ -364,10 +372,14 @@ export const TEMPLE = {
 };
 
 // ---------------------------------------------------------------- VILLAGE NIGHT
+// Same H-shaped street plan as the festival village, so the occupied town
+// reads as the same place and the route north to the castle stays obvious.
 const nightRows = fill(30, 20, '.');
-setRect(nightRows, 9, 9, 12, 5, 'p');
-setRect(nightRows, 14, 2, 2, 17, 'p');
 scatter(nightRows, 20, 7, 30, 20, ',');
+setRect(nightRows, 14, 0, 2, 20, 'p');   // main avenue / north gate
+setRect(nightRows, 9, 9, 12, 5, 'p');    // central plaza
+setRect(nightRows, 5, 5, 20, 2, 'p');    // north cross street
+setRect(nightRows, 5, 17, 20, 2, 'p');   // south cross street
 
 export const VILLAGE_NIGHT = {
   id: 'village_night', name: 'Brumalva Ocupada', theme: 'night', bgm: 'night', ambient: 'embers',
@@ -440,3 +452,34 @@ export const MAPS = {
 };
 
 export function getMap(id) { return MAPS[id]; }
+
+// The main quest text is the stable key used by the story scripts. Keeping the
+// target coordinates here lets the pause-menu map point at the next story beat
+// without coupling the UI to individual script functions.
+export const QUEST_TARGETS = {
+  'Encontre Lyra no centro da vila.': { map: 'village', x: 16, y: 11, label: 'Lyra' },
+  'Fale com Dorian, no norte da vila.': { map: 'village', x: 14, y: 7, label: 'Dorian' },
+  'Investigue os uivos ao norte da vila.': { map: 'village', x: 15, y: 4, label: 'Uivos ao norte' },
+  'Vá ao Santuário da Brasa, ao norte do bosque.': { map: 'forest', x: 12, y: 2, label: 'Saída norte do bosque' },
+  'Entre no Santuário da Brasa.': { map: 'shrine', x: 9, y: 3, label: 'Altar da Brasa' },
+  'Sobreviva ao Forte Abissal.': { map: 'prison', x: 8, y: 4, label: 'Garrick' },
+  'Fale com Garrick.': { map: 'prison', x: 8, y: 4, label: 'Garrick' },
+  'Saia da cela e atravesse o Forte Abissal.': { map: 'prison', x: 22, y: 15, label: 'Portão leste' },
+  'Encontre o Carcereiro Groth no salão leste.': { map: 'prison', x: 17, y: 10, label: 'Carcereiro Groth' },
+  'Fuja pelo portão leste do forte.': { map: 'prison', x: 22, y: 15, label: 'Portão leste' },
+  'Atravesse o Pico do Amanhecer.': { map: 'mountain', x: 8, y: 12, label: 'Mira' },
+  'Chegue ao topo do Pico do Amanhecer.': { map: 'mountain', x: 13, y: 2, label: 'Topo do Pico' },
+  'Entre no Santuário da Aurora.': { map: 'temple', x: 9, y: 3, label: 'Altar da Aurora' },
+  'Desça até Brumalva. A cidade está sob o jugo de Dorian.': { map: 'village_night', x: 14, y: 18, label: 'Brumalva ocupada' },
+  'Encontre a resistência de Brumalva.': { map: 'village_night', x: 6, y: 16, label: 'Resistência' },
+  'Fale com Brann, o líder da resistência.': { map: 'village_night', x: 6, y: 16, label: 'Brann' },
+  'Derrote Sir Varek no centro de Brumalva.': { map: 'village_night', x: 19, y: 9, label: 'Sir Varek' },
+  'Procure Lyra no centro da vila.': { map: 'village_night', x: 22, y: 8, label: 'Lyra' },
+  'Vá ao Castelo de Valdoria. Enfrente Dorian.': { map: 'castle', x: 11, y: 16, label: 'Castelo de Valdoria' },
+  'Abra caminho até o trono.': { map: 'castle', x: 11, y: 10, label: 'Trono' },
+  'Enfrente Dorian no trono.': { map: 'castle', x: 11, y: 4, label: 'Dorian' },
+};
+
+export function getQuestTarget(quest) {
+  return QUEST_TARGETS[quest] || null;
+}
