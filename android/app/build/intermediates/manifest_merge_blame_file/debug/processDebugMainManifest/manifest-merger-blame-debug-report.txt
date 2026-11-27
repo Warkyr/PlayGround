@@ -1,0 +1,48 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.lamina.alpha"
+4    android:versionCode="1"
+5    android:versionName="0.1-alpha" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="23"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:2:3-65
+11-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:2:20-62
+12
+13    <application
+13-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:3-7:17
+14        android:debuggable="true"
+15        android:extractNativeLibs="false"
+16        android:label="Lâmina Alpha"
+16-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:16-44
+17        android:theme="@style/AppTheme"
+17-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:81-112
+18        android:usesCleartextTraffic="true" >
+18-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:45-80
+19        <activity
+19-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:5-6:16
+20            android:name="com.lamina.alpha.MainActivity"
+20-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:15-43
+21            android:configChanges="orientation|keyboardHidden|screenSize"
+21-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:106-167
+22            android:exported="true"
+22-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:44-67
+23            android:screenOrientation="landscape" >
+23-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:68-105
+24            <intent-filter>
+24-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:7-148
+25                <action android:name="android.intent.action.MAIN" />
+25-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:22-73
+25-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:30-71
+26
+27                <category android:name="android.intent.category.LAUNCHER" />
+27-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:73-132
+27-->/home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:83-130
+28            </intent-filter>
+29        </activity>
+30    </application>
+31
+32</manifest>

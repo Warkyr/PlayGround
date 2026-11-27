@@ -1,0 +1,57 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:1:1-8:12
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:1:1-8:12
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:1:1-8:12
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:1:1-8:12
+	package
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:1:11-69
+uses-permission#android.permission.INTERNET
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:2:3-65
+	android:name
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:2:20-62
+application
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:3-7:17
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:3-7:17
+	android:extractNativeLibs
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	android:label
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:16-44
+	android:theme
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:81-112
+	android:usesCleartextTraffic
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:3:45-80
+activity#com.lamina.alpha.MainActivity
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:5-6:16
+	android:screenOrientation
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:68-105
+	android:exported
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:44-67
+	android:configChanges
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:106-167
+	android:name
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:4:15-43
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:7-148
+action#android.intent.action.MAIN
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:22-73
+	android:name
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:30-71
+category#android.intent.category.LAUNCHER
+ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:73-132
+	android:name
+		ADDED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml:5:83-130
+uses-sdk
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /home/runner/work/PlayGround/PlayGround/android/app/src/main/AndroidManifest.xml

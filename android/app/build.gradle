@@ -1,0 +1,8 @@
+plugins { id 'com.android.application' }
+android {
+ namespace 'com.lamina.alpha'
+ compileSdk 35
+ defaultConfig { applicationId 'com.lamina.alpha'; minSdk 23; targetSdk 35; versionCode 1; versionName '0.1-alpha' }
+ buildTypes { release { minifyEnabled false } }
+}
+dependencies {}
