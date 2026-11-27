@@ -20,6 +20,8 @@ export const HUMANS = {
   villager1: { skin:'#e8b990', skin2:'#c69268', hair:'#6b4a2a', hairStyle:'short', top:'#7a6a4a', top2:'#5c4f36', trim:'#b39a6a', pants:'#4a4438', boots:'#2e2a22', weapon:'none', accent:'#c9b98a' },
   villager2: { skin:'#c68a62', skin2:'#a06a48', hair:'#2a1a12', hairStyle:'long', top:'#8a5a4a', top2:'#6a4236', trim:'#c9a07a', pants:'#3f3a44', boots:'#26222c', skirt:'#6a4a5a', weapon:'none', accent:'#d8a08a' },
   villager3: { skin:'#f2c8a8', skin2:'#d3a07c', hair:'#c9a04a', hairStyle:'ponytail', top:'#5a7a8a', top2:'#41606e', trim:'#a8c4c9', pants:'#3f4a52', boots:'#282e34', weapon:'none', accent:'#a8d8e0' },
+  sena: { skin:'#e8c0a0', skin2:'#c49a78', hair:'#b8a898', hair2:'#8e7e70', hairStyle:'long', top:'#8a5a4a', top2:'#6a4236', trim:'#d8b88a', pants:'#4a3a3a', boots:'#2e2424', skirt:'#6a4a4a', weapon:'none', accent:'#d8b88a', eye:'#3a2a20' },
+  nina: { skin:'#f2c8a8', skin2:'#d3a07c', hair:'#7a4a2a', hair2:'#5a341e', hairStyle:'ponytail', top:'#4a8a7a', top2:'#356a5e', trim:'#c9e8d8', pants:'#3a4a44', boots:'#242e2a', weapon:'none', accent:'#8ad8c0', eye:'#2a4a3a' },
   elder: { skin:'#d8b090', skin2:'#b58a6a', hair:'#e0e0e0', hair2:'#bdbdbd', hairStyle:'long', beard:'#e0e0e0', top:'#6a5a7a', top2:'#4e4260', trim:'#c9b98a', pants:'#3a3444', boots:'#24202c', weapon:'staff', accent:'#d8c9a0', eye:'#3a2a20' },
   merchant: { skin:'#e0a878', skin2:'#bd8252', hair:'#4a3020', hairStyle:'short', top:'#8a6a3a', top2:'#6a4e28', trim:'#e0c070', pants:'#4a3f34', boots:'#2e261e', weapon:'none', accent:'#e0c070' },
   child: { skin:'#f2c8a8', skin2:'#d3a07c', hair:'#8a5a2a', hairStyle:'spiky', top:'#6a8a5a', top2:'#4e6a42', trim:'#b8d090', pants:'#4a4438', boots:'#2e2a22', weapon:'none', accent:'#b8d090' },

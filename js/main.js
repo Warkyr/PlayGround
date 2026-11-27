@@ -5,7 +5,7 @@ import {
 import { audio } from './audio.js';
 import { ui } from './ui.js';
 import {
-  drawCharacter, drawProp, drawChest, propSolidRect, propBaseY,
+  drawCharacter, drawProp, drawChest, propSolidRect, propBaseY, propDoorTile,
   renderGround, tileWalkable, drawWaterShimmer, drawTitleBG, THEMES,
 } from './art.js';
 import {
@@ -206,7 +206,13 @@ function solidAt(tx, ty) {
     const r = propSolidRect(p);
     if (!r) continue;
     if (p.openFlag && game.flags[p.openFlag]) continue;
-    if (tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h) return true;
+    if (tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h) {
+      // The doorway of an enterable house is walkable so the portal on the
+      // threshold can fire. Every other tile of the footprint stays solid.
+      const door = propDoorTile(p);
+      if (door && tx >= door.x && tx < door.x + door.w && ty === door.y) continue;
+      return true;
+    }
   }
   for (const n of currentMap.npcs) {
     if (!npcPresent(n)) continue;
@@ -323,7 +329,15 @@ function interact() {
   const tx = player.x + dx;
   const ty = player.y + dy;
 
-  const npc = currentMap.npcs.find((n) => npcPresent(n) && n.x === tx && n.y === ty);
+  const npcAt = (x, y) => currentMap.npcs.find((n) => npcPresent(n) && n.x === x && n.y === y);
+
+  let npc = npcAt(tx, ty);
+  // Shops use a counter between the keeper and the customer. If the tile in
+  // front of the player is a counter, allow talking to whoever stands behind it.
+  if (!npc) {
+    const counter = currentMap.props.find((p) => p.t === 'counter' && tx >= p.x && tx < p.x + (p.w ?? 3) && p.y === ty);
+    if (counter) npc = npcAt(tx + dx, ty + dy);
+  }
   if (npc) {
     audio.sfx('confirm');
     if (npc.talk && hasScript(npc.talk)) runStory(npc.talk);
@@ -337,7 +351,7 @@ function interact() {
   const prop = currentMap.props.find((p) => p.x === tx && p.y === ty && p.t === 'sign');
   if (prop) {
     audio.sfx('confirm');
-    ui.say('Narrador', 'A placa está gasta pelo tempo. Resta apenas uma palavra: “Aurora”.');
+    ui.say('Narrador', prop.text || 'A placa está gasta pelo tempo. Resta apenas uma palavra: “Aurora”.');
   }
 }
 
@@ -481,8 +495,11 @@ async function runBattle(ids, opts = {}) {
   }
 }
 
+// Shops are opened from inside story scripts, so the story blocker is still
+// active here. Only reject the call when the game is in another mode (battle,
+// title); the shop adds its own blocker while the menu is open.
 async function openShop(stock, title) {
-  if (mode !== 'explore' || isBusy()) return;
+  if (mode !== 'explore') return;
   block('shop');
   try {
     await shopMenu(game, stock, title);
@@ -493,7 +510,7 @@ async function openShop(stock, title) {
 }
 
 async function openWeaponShop(stock, title) {
-  if (mode !== 'explore' || isBusy()) return;
+  if (mode !== 'explore') return;
   block('weapon-shop');
   try {
     await weaponShopMenu(game, stock, title);
@@ -649,10 +666,10 @@ function drawLighting(camX, camY, zoom) {
   const py = (pp.y - camY) * zoom;
   g.save();
   for (const p of currentMap.props) {
-    if (!['torch', 'campfire', 'crystal', 'lamp', 'altar', 'portal'].includes(p.t)) continue;
+    if (!['torch', 'campfire', 'forge', 'crystal', 'lamp', 'altar', 'portal'].includes(p.t)) continue;
     const wx = (p.x * 16 + 8 - camX) * zoom;
     const wy = (p.y * 16 + 8 - camY) * zoom;
-    const radius = (p.t === 'campfire' ? 110 : p.t === 'lamp' ? 70 : 60) * zoom;
+    const radius = (p.t === 'campfire' || p.t === 'forge' ? 110 : p.t === 'lamp' ? 70 : 60) * zoom;
     const grd = g.createRadialGradient(wx, wy, 2, wx, wy, radius);
     grd.addColorStop(0, 'rgba(255,200,120,.22)');
     grd.addColorStop(1, 'rgba(255,180,90,0)');

@@ -202,6 +202,81 @@ const SCRIPTS = {
     await lines([['Narrador', who]]);
   },
 
+  async farmer_village(g, ctx) {
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Bento', 'Os cães não voltaram esta noite. Isso devia me deixar aliviado.'],
+        ['Bento', 'Mas o gado também não. Nem os pássaros. A vila inteira está prendendo a respiração.'],
+      ]);
+      return;
+    }
+    await lines([
+      ['Bento', 'Kael! Se ver o Pip correndo perto do poço, manda ele voltar. A colheita não se carrega sozinha.'],
+      ['Kael', 'Pip tem sete anos e energia para três colheitas.'],
+      ['Bento', 'É por isso que eu planto e ele colhe. Todo mundo sai ganhando.'],
+    ]);
+  },
+
+  async sena_home(g, ctx) {
+    if (!g.flags.metSena) {
+      set(g, 'metSena');
+      await lines([
+        ['Sena', 'Kael! Entra, entra. Deixei pão na mesa e sopa no fogo.'],
+        ['Kael', 'Mãe, eu moro aqui.'],
+        ['Sena', 'E mesmo assim esquece de comer. Senta.'],
+        ['Narrador', 'A casa cheira a lenha, pão e ervas secas. É pequena, mas cada canto parece maior por dentro.'],
+        ['Sena', 'A Lyra passou por aqui procurando você. Disse que queria conversar depois do festival.'],
+        ['Kael', 'Eu sei. Estou... pensando no que dizer.'],
+        ['Sena', 'Então pense menos e escute mais. Funcionou com seu pai.'],
+      ]);
+      return;
+    }
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Sena', 'Dorian esteve estranho hoje. Não gosto do jeito que ele olha para o norte.'],
+        ['Kael', 'Eu vou falar com ele.'],
+        ['Sena', 'Fale. Mas leve a espada. E volte para jantar.'],
+      ]);
+      return;
+    }
+    await lines([
+      ['Sena', 'O pão está esfriando. E você ainda está de pé.'],
+      ['Kael', 'Só mais um pouco, mãe.'],
+      ['Sena', 'Foi o que seu pai disse. Depois foi embora e a sopa ficou.'],
+      ['Kael', 'Eu volto.'],
+      ['Sena', 'Eu sei. Só estou lembrando você de que voltar também é uma escolha.'],
+    ]);
+  },
+
+  async nina_home(g, ctx) {
+    if (!g.flags.ninaGift) {
+      set(g, 'ninaGift');
+      await lines([
+        ['Nina', 'Kael! A Anciã saiu para a praça. Eu fiquei cuidando das ervas.'],
+        ['Kael', 'Você está aprendendo com ela?'],
+        ['Nina', 'Tentando. Metade do que ela diz eu entendo depois de dormir.'],
+        ['Nina', 'Leva esta poção. Fiz ontem. Ainda tem gosto de mato, mas funciona.'],
+        ['Narrador', 'Nina entrega um frasco pequeno, tampado com cera e um barbante verde.'],
+      ]);
+      ctx.give('potion', 1);
+      return;
+    }
+    if (g.flags.festivalDone) {
+      await lines([
+        ['Nina', 'A Anciã voltou falando de uivos. Disse para eu não sair depois do escuro.'],
+        ['Nina', 'Kael... você vai voltar, né?'],
+        ['Kael', 'Vou.'],
+        ['Nina', 'Então eu guardo mais uma poção para você.'],
+      ]);
+      return;
+    }
+    await lines([
+      ['Nina', 'Se a Anciã perguntar, eu terminei de secar todas as folhas.'],
+      ['Kael', 'E terminou?'],
+      ['Nina', 'Quase todas. A metade que importa.'],
+    ]);
+  },
+
   async guard_gate(g, ctx) {
     if (g.flags.festivalDone) {
       await lines([

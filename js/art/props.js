@@ -34,8 +34,12 @@ export const PROP_DEFS = {
   crystal: { w: 1, h: 1, solid: true, tall: true },
   torch:   { w: 1, h: 1, solid: true, tall: true },
   table:   { w: 2, h: 1, solid: true },
+  counter: { w: 3, h: 1, solid: true },
   bed:     { w: 2, h: 2, solid: true },
   shelf:   { w: 2, h: 1, solid: true, tall: true },
+  anvil:   { w: 1, h: 1, solid: true, tall: true },
+  forge:   { w: 2, h: 2, solid: true, tall: true },
+  plant:   { w: 1, h: 1, solid: true, tall: true },
   door:    { w: 1, h: 1, solid: false, tall: true },
   portal:  { w: 2, h: 2, solid: false, tall: true },
   bars:    { w: 3, h: 1, solid: true, tall: true },
@@ -59,6 +63,14 @@ export function propSolidRect(p) {
   if (d.solid === false) return null;
   if (d.baseOnly) return { x: p.x, y: p.y + s.h - 1, w: s.w, h: 1 };
   return { x: p.x, y: p.y, w: s.w, h: s.h };
+}
+
+// Enterable buildings carve a two-tile doorway out of their solid footprint.
+// Keeping the maths in one place means collision and portals always agree.
+export function propDoorTile(p) {
+  if (!p.enterable) return null;
+  const s = propSize(p);
+  return { x: p.x + Math.floor(s.w / 2) - 1, y: p.y + s.h - 1, w: 2, h: 1 };
 }
 
 function rect(g, c, x, y, w, h) { g.fillStyle = c; g.fillRect(x, y, w, h); }
@@ -122,6 +134,22 @@ function drawHouse(g, p, th, time, o) {
   rect(g, '#4a2e1a', dx, y + H - 20, 14, 18);
   rect(g, '#6e4728', dx + 1, y + H - 19, 12, 17);
   g.fillStyle = '#c9a44c'; g.fillRect(dx + 10, y + H - 11, 2, 2);
+  // A lit doorstep tells the player this building can be entered.
+  if (p.enterable) {
+    g.fillStyle = th.stone2; g.fillRect(dx - 3, y + H - 4, 20, 3);
+    g.fillStyle = th.stone; g.fillRect(dx - 2, y + H - 3, 18, 1);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const glow = g.createRadialGradient(dx + 7, y + H - 10, 1, dx + 7, y + H - 10, 26);
+    glow.addColorStop(0, 'rgba(255,205,120,.26)');
+    glow.addColorStop(1, 'rgba(255,180,90,0)');
+    g.fillStyle = glow; g.fillRect(dx - 20, y + H - 36, 54, 44);
+    g.restore();
+    // small hanging lantern beside the frame
+    g.fillStyle = '#3a2a1e'; g.fillRect(dx + 17, y + H - 27, 2, 5);
+    g.fillStyle = '#ffd27a'; g.fillRect(dx + 15, y + H - 23, 6, 5);
+    g.fillStyle = '#c9a44c'; g.fillRect(dx + 16, y + H - 24, 4, 1);
+  }
   // windows
   const glow = th.dark ? '#ffcf7a' : '#7a9aac';
   const wxs = [x + 14, x + W - 30];
@@ -500,6 +528,70 @@ function drawTorch(g, p, th, time) {
   g.fillStyle = '#ffd27a'; g.fillRect(x + 7, y + 2 + f, 2, 4);
 }
 
+function drawCounter(g, p, th) {
+  const x = p.x * 16, y = p.y * 16;
+  const w = propSize(p).w * 16;
+  shadow(g, x + w / 2, y + 15, w * 0.46, 3, 0.3);
+  g.fillStyle = '#3a2416'; g.fillRect(x + 1, y + 5, w - 2, 11);
+  g.fillStyle = '#6e4728'; g.fillRect(x + 2, y + 4, w - 4, 9);
+  g.fillStyle = '#8a5c34'; g.fillRect(x + 2, y + 3, w - 4, 3);
+  g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x + 4, y + 3, w - 12, 1);
+  // goods on top
+  g.fillStyle = '#c9a44c'; g.fillRect(x + 6, y + 1, 3, 3);
+  g.fillStyle = '#8a3040'; g.fillRect(x + w - 12, y, 3, 4);
+  g.fillStyle = '#5a8a4a'; g.fillRect(x + w - 18, y + 1, 3, 3);
+}
+
+function drawPlant(g, p, th) {
+  const x = p.x * 16, y = p.y * 16;
+  shadow(g, x + 8, y + 15, 5, 2, 0.28);
+  g.fillStyle = '#7a4a2e'; g.fillRect(x + 4, y + 10, 8, 6);
+  g.fillStyle = '#9a6238'; g.fillRect(x + 5, y + 10, 6, 2);
+  g.fillStyle = '#3a5a32'; g.fillRect(x + 7, y + 4, 2, 7);
+  g.fillStyle = '#4a7a3e';
+  g.fillRect(x + 3, y + 5, 4, 2); g.fillRect(x + 9, y + 3, 4, 2);
+  g.fillRect(x + 5, y + 1, 3, 3); g.fillRect(x + 8, y + 6, 3, 2);
+  g.fillStyle = '#6a9a50';
+  g.fillRect(x + 4, y + 4, 2, 1); g.fillRect(x + 10, y + 2, 2, 1);
+}
+
+function drawAnvil(g, p, th) {
+  const x = p.x * 16, y = p.y * 16;
+  shadow(g, x + 8, y + 15, 7, 2, 0.32);
+  g.fillStyle = '#2e3038'; g.fillRect(x + 3, y + 11, 10, 4);
+  g.fillStyle = '#4a4e58'; g.fillRect(x + 5, y + 7, 6, 5);
+  g.fillStyle = '#5e6470'; g.fillRect(x + 2, y + 5, 12, 3);
+  g.fillStyle = '#7a828e'; g.fillRect(x + 3, y + 5, 9, 1);
+  g.fillStyle = '#3a3e48'; g.fillRect(x + 3, y + 8, 1, 3);
+  g.fillStyle = '#e8b155'; g.fillRect(x + 11, y + 4, 2, 1);
+}
+
+function drawForge(g, p, th, time = 0) {
+  const x = p.x * 16, y = p.y * 16;
+  const w = propSize(p).w * 16;
+  shadow(g, x + w / 2, y + 31, w * 0.48, 4, 0.34);
+  // stone body
+  g.fillStyle = '#3e3a34'; g.fillRect(x + 2, y + 12, w - 4, 20);
+  g.fillStyle = '#5a544a'; g.fillRect(x + 3, y + 13, w - 6, 18);
+  g.fillStyle = '#6e6658';
+  for (let i = 0; i < 4; i++) g.fillRect(x + 4 + i * 7, y + 15 + (i % 2) * 6, 6, 4);
+  // hood / chimney
+  g.fillStyle = '#4a443a'; g.fillRect(x + w / 2 - 4, y - 10, 8, 24);
+  g.fillStyle = '#5e564a'; g.fillRect(x + w / 2 - 2, y - 9, 4, 22);
+  g.fillStyle = '#2a2620'; g.fillRect(x + w / 2 - 5, y - 12, 10, 3);
+  // fire mouth
+  const f = Math.sin(time * 8 + p.x) * 1.5;
+  g.fillStyle = '#2a1a12'; g.fillRect(x + 6, y + 18, w - 12, 9);
+  g.save(); g.globalCompositeOperation = 'lighter';
+  const grd = g.createRadialGradient(x + w / 2, y + 22, 1, x + w / 2, y + 22, 24);
+  grd.addColorStop(0, 'rgba(255,200,100,.5)');
+  grd.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = grd; g.fillRect(x - 12, y - 4, w + 24, 44);
+  g.restore();
+  g.fillStyle = '#e86a2a'; g.fillRect(x + 8, y + 20 + f, w - 16, 5);
+  g.fillStyle = '#ffd27a'; g.fillRect(x + 10, y + 21 + f, w - 20, 2);
+}
+
 function drawTable(g, p, th) {
   const x = p.x * 16, y = p.y * 16;
   g.fillStyle = '#5c4028'; g.fillRect(x + 2, y + 4, 28, 8);
@@ -656,8 +748,12 @@ export function drawProp(g, p, themeName, time = 0, opts = {}) {
     case 'crystal': drawCrystal(g, p, th, time); break;
     case 'torch': drawTorch(g, p, th, time); break;
     case 'table': drawTable(g, p, th); break;
+    case 'counter': drawCounter(g, p, th); break;
     case 'bed': drawBed(g, p, th); break;
     case 'shelf': drawShelf(g, p, th); break;
+    case 'anvil': drawAnvil(g, p, th); break;
+    case 'forge': drawForge(g, p, th, time); break;
+    case 'plant': drawPlant(g, p, th); break;
     case 'door': drawDoor(g, p, th); break;
     case 'bars': drawBars(g, p, th, opts); break;
     case 'portal': drawPortal(g, p, th, time); break;
