@@ -4,7 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#101a20" />
+  <meta name="description" content="Hemisfério — jogo de estratégia das Américas. Governa a economia, a diplomacia e a guerra em uma campanha mensal." />
+  <meta name="application-name" content="Hemisfério" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Hemisfério" />
   <title>Hemisfério — Grand Strategy</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -19,6 +30,7 @@
         <div class="top-stat"><span class="stat-icon">♟</span><div><small>POPULAÇÃO</small><b id="topPop">—</b></div></div>
         <div class="top-stat stability-top"><span class="stat-icon">✳</span><div><small>ESTABILIDADE</small><b id="topStability">—</b></div></div>
       </div>
+      <button class="install-button hidden" id="installBtn" title="Instalar aplicativo" aria-label="Instalar aplicativo"><span>⤓</span><small>INSTALAR</small></button>
       <button class="icon-button" id="settingsBtn" title="Ajuda">?</button>
     </header>
 
@@ -107,7 +119,7 @@
         <div class="modal-foot"><span>◈ ECONOMIA · DIPLOMACIA · ESTRATÉGIA</span><span id="selectHint">SELECIONE PARA COMEÇAR</span></div>
       </div>
     </div>
-    <div id="helpModal" class="modal-backdrop hidden"><div class="help-modal"><button class="modal-close" id="closeHelp">×</button><div class="modal-kicker">GUIA DO COMANDANTE</div><h2>Como jogar</h2><p><b>Objetivo:</b> mantenha a estabilidade em 70 ou mais por 12 meses para concluir o mandato.</p><p><b>Governar:</b> abra <em>Ações</em> para investir na economia ou reduzir a dívida. As escolhas afetam o crescimento e a estabilidade.</p><p><b>Diplomacia:</b> selecione um país no mapa para negociar, enviar cooperação ou declarar guerra.</p><p><b>Conflito:</b> após declarar guerra, volte ao país e use <em>Anexar</em>. É necessário poder militar superior e tesouro suficiente. Se preferir recuar, use <em>Propor paz</em>.</p><p><b>Tempo:</b> avance mês a mês ou use velocidades maiores. A economia evolui com o tempo.</p><button id="closeHelpBottom" class="advance">ENTENDI</button></div></div>
+    <div id="helpModal" class="modal-backdrop hidden"><div class="help-modal"><button class="modal-close" id="closeHelp">×</button><div class="modal-kicker">GUIA DO COMANDANTE</div><h2>Como jogar</h2><p><b>Objetivo:</b> mantenha a estabilidade em 70 ou mais por 12 meses para concluir o mandato.</p><p><b>Governar:</b> abra <em>Ações</em> para investir na economia ou reduzir a dívida. As escolhas afetam o crescimento e a estabilidade.</p><p><b>Diplomacia:</b> selecione um país no mapa para negociar, enviar cooperação ou declarar guerra.</p><p><b>Conflito:</b> após declarar guerra, volte ao país e use <em>Anexar</em>. É necessário poder militar superior e tesouro suficiente. Se preferir recuar, use <em>Propor paz</em>.</p><p><b>Tempo:</b> avance mês a mês ou use velocidades maiores. A economia evolui com o tempo.</p><p><b>Aplicativo:</b> instale pelo botão <em>⤓</em> na barra superior ou pelo menu do navegador. No iPhone ou iPad, use <em>Compartilhar → Adicionar à Tela de Início</em>. Instalado, o jogo abre em tela cheia e funciona offline.</p><button id="closeHelpBottom" class="advance">ENTENDI</button></div></div>
     <div class="portrait-warning"><div class="rotate-icon">▱</div><b>VIRE SEU DISPOSITIVO</b><span>Hemisfério foi feito para jogar em tela deitada.</span></div>
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </main>

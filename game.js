@@ -734,3 +734,62 @@ document.addEventListener('keydown', event => {
 makeCards();
 bindCountries();
 scheduleTick();
+
+const installButton = $('#installBtn');
+let deferredInstallPrompt = null;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+function showInstallButton() {
+  if (!isStandaloneApp()) installButton.classList.remove('hidden');
+}
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  showInstallButton();
+});
+
+installButton.onclick = async () => {
+  if (deferredInstallPrompt) {
+    try {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      toast(choice.outcome === 'accepted' ? 'Instalação aceita' : 'Instalação cancelada');
+    } catch {
+      toast('Use o menu do navegador para instalar o app');
+    } finally {
+      deferredInstallPrompt = null;
+      installButton.classList.add('hidden');
+    }
+    return;
+  }
+  toast(isIOS
+    ? 'Compartilhar → Adicionar à Tela de Início'
+    : 'Abra o menu do navegador e escolha Instalar app');
+};
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  installButton.classList.add('hidden');
+  toast('Hemisfério instalado no dispositivo');
+});
+
+if (isStandaloneApp()) {
+  installButton.classList.add('hidden');
+} else if (isIOS) {
+  showInstallButton();
+}
+
+if ('serviceWorker' in navigator &&
+  (location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname))) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(error => {
+      console.warn('Service worker não registrado:', error);
+    });
+  });
+}

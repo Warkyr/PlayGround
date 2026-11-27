@@ -11,7 +11,7 @@ DIST_DIR="$PROJECT_DIR/dist"
 /usr/bin/time -p mkdir -p "$DIST_DIR" "$OPENCODE_WEB_DIR"
 
 # Static site: copy source into the deployment directory, excluding metadata and build output.
-/usr/bin/time -p bash -c 'set -e; rm -rf dist.tmp; mkdir dist.tmp; cp index.html styles.css game.js dist.tmp/; rm -rf dist; mv dist.tmp dist'
+/usr/bin/time -p bash -c 'set -e; rm -rf dist.tmp; mkdir dist.tmp; cp index.html styles.css game.js manifest.webmanifest sw.js dist.tmp/; cp -R icons dist.tmp/; rm -rf dist; mv dist.tmp dist'
 
 # Record deployment metadata required by the worker, with absolute paths only.
 /usr/bin/time -p python3 - "$OPENCODE_WEB_DIR/deployment-output.json" "$PROJECT_DIR" "$DIST_DIR" <<'PY'

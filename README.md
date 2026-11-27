@@ -16,3 +16,12 @@
 - 👤 [Explore the creator's projects](https://go.ondev.store/Warkyr).
 - 🌍 [Create with OMGithub](https://go.ondev.store/).
 <!-- omgithub:readme:end -->
+
+## Hemisfério
+
+Jogo de estratégia das Américas em HTML, CSS e JavaScript puros.
+
+- Instalável como web app (PWA) em desktop, Android e iOS.
+- Abre em tela cheia, em paisagem, com suporte a safe areas.
+- Funciona offline após a primeira visita.
+- Para publicar, `start.sh` monta `dist/` com todos os arquivos do app.

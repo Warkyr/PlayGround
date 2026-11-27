@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hemisfério">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="72%">
+      <stop offset="0" stop-color="#233b3d"/>
+      <stop offset=".6" stop-color="#15272b"/>
+      <stop offset="1" stop-color="#0c161b"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f2da9b"/>
+      <stop offset=".5" stop-color="#d1ad68"/>
+      <stop offset="1" stop-color="#a9864c"/>
+    </linearGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#b2cfca" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#grid)"/>
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#d1ad68" stroke-opacity=".18" stroke-width="1.5"/>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#d1ad68" stroke-opacity=".1" stroke-width="1"/>
+  <path d="M256 72 440 256 256 440 72 256Z" fill="#142428" stroke="url(#gold)" stroke-width="12"/>
+  <path d="M256 100 412 256 256 412 100 256Z" fill="none" stroke="#d1ad68" stroke-opacity=".35" stroke-width="2"/>
+  <path d="M198 176h30v160h-30zM284 176h30v160h-30zM228 238h56v36h-56z" fill="url(#gold)"/>
+  <circle cx="256" cy="140" r="4" fill="#e8c981"/>
+  <circle cx="256" cy="372" r="4" fill="#e8c981"/>
+  <circle cx="140" cy="256" r="4" fill="#e8c981"/>
+  <circle cx="372" cy="256" r="4" fill="#e8c981"/>
+</svg>
