@@ -81,7 +81,7 @@ export function layoutBattle(state) {
   state.enemies.forEach((e, i) => {
     const boss = !!e.boss;
     const targetH = clamp(
-      h * (boss ? (portrait ? 0.24 : 0.28) : (portrait ? 0.155 : 0.20)),
+      h * (boss ? (portrait ? 0.24 : 0.28) : (portrait ? 0.17 : 0.24)),
       compact ? 56 : 80,
       boss ? 250 : 185,
     );
@@ -110,6 +110,9 @@ export function layoutBattle(state) {
     e.x = cursor + e.drawW / 2;
     cursor += e.drawW + gap;
     e.y = groundY + (n > 1 && !portrait ? (i % 2) * h * 0.012 : 0);
+    // Alternate the HP/name plate height in groups so long names do not
+    // overlap when several enemies share the same ground line.
+    e.labelLift = n > 1 ? (i % 2) * (compact ? 13 : 17) : 0;
   });
 
   const alive = state.allies.filter((m) => m.hp > 0);
@@ -496,8 +499,8 @@ export function drawBattleFrame(state, now) {
     drawEnemy(g, e.id, e.x + dx, e.y, e.scale, state.time, { flash: e.flashT > 0, phase: e.bobPhase });
     // HP bar — anchored to the sprite's real drawn height so it never floats.
     // Bosses already have the top strip, so skip the duplicate world-space bar.
-    const bw = clamp((e.drawW || e.scale * 30) * 0.92, 64, 190);
-    const bx = e.x - bw / 2, by = e.y - (e.drawH || e.scale * 48) - 18;
+    const bw = clamp((e.drawW || e.scale * 30) * 0.92, 50, 190);
+    const bx = e.x - bw / 2, by = e.y - (e.drawH || e.scale * 48) - 18 - (e.labelLift || 0);
     if (!e.boss) {
       g.fillStyle = 'rgba(4,7,14,.8)';
       g.fillRect(bx - 2, by - 2, bw + 4, 14);
