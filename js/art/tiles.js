@@ -66,9 +66,18 @@ export const THEMES = {
     wall:'#443848', wall2:'#322a36', roof:'#4a2030', roof2:'#321420', plaster:'#5a4a5a', accent:'#e35f72',
     sky:'#180e20', dark:true,
   },
+  // Warm timber-and-plaster interiors used by the enterable village houses.
+  interior: {
+    grass:'#5a4a36', grass2:'#66543e', grassDark:'#46382a', blade:'#7a6448', flower:'#c9a44c', flower2:'#a8865a',
+    path:'#8a6a44', path2:'#7a5a38', pathDark:'#5e442a', pebble:'#a88a62',
+    water:'#3a5a6a', water2:'#4a6a7a', waterLight:'#a8d0e0',
+    stone:'#9a8a72', stone2:'#766650', wood:'#8a6238', wood2:'#5e4026',
+    wall:'#5a3e2a', wall2:'#3e2a1c', roof:'#7a4a3a', roof2:'#5a3428', plaster:'#c9b894', accent:'#e7c77b',
+    sky:'#1a1410',
+  },
 };
 
-const WALK = new Set(['.', ',', '"', 'p', 's', 'w', 'b', 'S', 'i', 'c', '=', 'u', 'd', 'f', 'g']);
+const WALK = new Set(['.', ',', '"', 'p', 's', 'w', 'W', 'b', 'S', 'i', 'c', '=', 'u', 'd', 'f', 'g']);
 export function tileWalkable(ch) { return WALK.has(ch); }
 export function tileIsWater(ch) { return ch === '~'; }
 export function tileIsEncounter(ch) { return ch === '"'; }
@@ -147,6 +156,31 @@ function drawWood(g, th, x, y, hash) {
   g.fillRect(x + 2, y + 1, 5, 1); g.fillRect(x + 9, y + 5, 5, 1);
   g.fillStyle = th.wood2;
   g.fillRect(x + 4, y + 4, 1, 3); g.fillRect(x + 11, y + 8, 1, 3); g.fillRect(x + 7, y + 12, 1, 3);
+}
+
+function drawPlank(g, th, x, y, hash) {
+  baseRect(g, th.wood, x, y, 16, 16);
+  // Two broad boards per tile. Long horizontal seams and grain read as timber;
+  // vertical joints are deliberately rare so the floor does not look like brick.
+  g.fillStyle = th.wood2;
+  g.fillRect(x, y + 7, 16, 1);
+  g.fillRect(x, y + 15, 16, 1);
+  g.fillStyle = 'rgba(0,0,0,.12)';
+  g.fillRect(x + 3, y + 3, 7, 1);
+  g.fillRect(x + 6, y + 11, 6, 1);
+  g.fillStyle = 'rgba(255,255,255,.09)';
+  g.fillRect(x + 2, y + 1, 5, 1);
+  g.fillRect(x + 9, y + 9, 4, 1);
+  if (hash > 0.82) {
+    g.fillStyle = th.wood2;
+    g.fillRect(x + 4, y + 5, 3, 1);
+    g.fillRect(x + 5, y + 4, 1, 3);
+  }
+  if (hash > 0.92) {
+    g.fillStyle = 'rgba(0,0,0,.10)';
+    g.fillRect(x, y, 1, 7);
+    g.fillRect(x + 15, y + 8, 1, 7);
+  }
 }
 
 function drawWater(g, th, x, y, hash, time = 0) {
@@ -258,6 +292,7 @@ export function renderGround(map) {
         case 's': drawStoneFloor(g, th, px, py, hash, false); break;
         case '=': drawStoneFloor(g, th, px, py, hash, true); break;
         case 'w': drawWood(g, th, px, py, hash); break;
+        case 'W': drawPlank(g, th, px, py, hash); break;
         case '~': drawWater(g, th, px, py, hash); break;
         case 'b': drawBridge(g, th, px, py, hash); break;
         case 'S': drawSnow(g, th, px, py, hash); break;

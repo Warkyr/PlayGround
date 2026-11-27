@@ -22,6 +22,17 @@ const carve = (rows, pts, width = 2, ch = 'p') => {
 };
 const strings = (rows) => rows.map((r) => r.join(''));
 
+// Small timber interiors: wall border, wooden floor and a two-tile doorway
+// at the bottom centre that lines up with the portal back to the village.
+function interiorRows(w, h) {
+  const rows = fill(w, h, '#');
+  setRect(rows, 1, 1, w - 2, h - 2, 'W');
+  // Thicker back wall so the room reads as an interior even under the HUD.
+  setRect(rows, 1, 1, w - 2, 1, '#');
+  setRect(rows, Math.floor(w / 2) - 1, h - 1, 2, 1, 'W');
+  return rows;
+}
+
 function scatter(rows, count, seed, w, h, ch = ',', avoid = []) {
   const rng = mulberry32(seed);
   for (let i = 0; i < count; i++) {
@@ -60,12 +71,17 @@ export const VILLAGE = {
   id: 'village', name: 'Brumalva', theme: 'village', bgm: 'village', ambient: 'leaves',
   w: 30, h: 20, ground: strings(villageRows), spawn: { x: 14, y: 18, dir: 'up' },
   props: [
-    { t: 'house', x: 3, y: 2 }, { t: 'house', x: 21, y: 2, v: 'blue' },
-    { t: 'house', x: 3, y: 14, v: 'thatch' }, { t: 'house', x: 21, y: 14 },
+    { t: 'house', x: 3, y: 2, enterable: true }, { t: 'house', x: 21, y: 2, v: 'blue', enterable: true },
+    { t: 'house', x: 3, y: 14, v: 'thatch', enterable: true }, { t: 'house', x: 21, y: 14, enterable: true },
     { t: 'fountain', x: 11, y: 10 },
     { t: 'stall', x: 17, y: 10 },
     { t: 'lamp', x: 9, y: 8 }, { t: 'lamp', x: 20, y: 8 }, { t: 'lamp', x: 9, y: 14 }, { t: 'lamp', x: 20, y: 14 },
-    { t: 'sign', x: 12, y: 17 }, { t: 'dummy', x: 6, y: 12 },
+    { t: 'sign', x: 12, y: 17, text: 'Praça de Brumalva. Ao norte, o Santuário da Brasa. As casas ao redor estão abertas durante o festival.' },
+    { t: 'sign', x: 2, y: 6, text: 'Casa da Anciã Maeve. A porta está aberta — entre e espere, se ela não estiver.' },
+    { t: 'sign', x: 27, y: 6, text: 'Ferraria de Haldor. Aço honesto para tempos desonestos.' },
+    { t: 'sign', x: 2, y: 13, text: 'Casa de Kael. O teto range, mas é lar.' },
+    { t: 'sign', x: 27, y: 13, text: 'Empório de Tolan. Tudo tem preço, até conselho.' },
+    { t: 'dummy', x: 6, y: 12 },
     { t: 'crate', x: 20, y: 12 }, { t: 'barrel', x: 21, y: 12 },
     { t: 'well', x: 25, y: 8 },
     { t: 'bush', x: 2, y: 8 }, { t: 'bush', x: 27, y: 10 }, { t: 'bush', x: 12, y: 6 },
@@ -74,15 +90,18 @@ export const VILLAGE = {
     { id: 'lyra', sprite: 'lyra', x: 16, y: 11, dir: 'down', name: 'Lyra', talk: 'lyra_festival' },
     { id: 'dorian', sprite: 'dorian', x: 14, y: 7, dir: 'down', name: 'Dorian', talk: 'dorian_village' },
     { id: 'elder', sprite: 'elder', x: 8, y: 9, dir: 'right', name: 'Anciã Maeve', talk: 'elder_village' },
-    { id: 'merchant', sprite: 'merchant', x: 18, y: 12, dir: 'down', name: 'Tolan', talk: 'merchant_village' },
     { id: 'child', sprite: 'child', x: 19, y: 14, dir: 'left', name: 'Pip', talk: 'child_village', wander: 2 },
     { id: 'garrick', sprite: 'garrick', x: 8, y: 13, dir: 'right', name: 'Garrick', talk: 'garrick_village' },
-    { id: 'blacksmith', sprite: 'villager1', x: 12, y: 15, dir: 'up', name: 'Haldor', talk: 'blacksmith_village' },
+    { id: 'farmer', sprite: 'villager1', x: 24, y: 9, dir: 'right', name: 'Bento', talk: 'farmer_village' },
     { id: 'villager2', sprite: 'villager2', x: 23, y: 12, dir: 'left', name: 'Lavadeira', talk: 'villager_village', wander: 1 },
     { id: 'guard', sprite: 'guard', x: 16, y: 2, dir: 'down', name: 'Guarda', talk: 'guard_gate' },
   ],
   portals: [
     { x: 14, y: 0, w: 2, h: 1, to: 'forest', tx: 12, ty: 16, dir: 'up', when: (g) => g.flags.northOpen },
+    { x: 5, y: 5, w: 2, h: 1, to: 'house_elder', tx: 11, ty: 12, dir: 'up' },
+    { x: 23, y: 5, w: 2, h: 1, to: 'smithy', tx: 11, ty: 12, dir: 'up' },
+    { x: 5, y: 17, w: 2, h: 1, to: 'house_kael', tx: 11, ty: 12, dir: 'up' },
+    { x: 23, y: 17, w: 2, h: 1, to: 'shop', tx: 11, ty: 12, dir: 'up' },
   ],
   chests: [{ id: 'v_chest1', x: 27, y: 16, item: 'potion', n: 2 }],
   triggers: [
@@ -90,7 +109,105 @@ export const VILLAGE = {
   ],
   onEnter: 'village_intro',
 };
-borderTrees(VILLAGE, 11, { skip: [[12, 0, 6, 2], [12, 18, 6, 2]] });
+borderTrees(VILLAGE, 11, { skip: [[12, 0, 6, 2], [12, 18, 6, 2], [4, 18, 4, 2], [22, 18, 4, 2]] });
+
+// ---------------------------------------------------------------- VILLAGE INTERIORS
+// Every interior shares the same 24x14 shell: a two-tile door at the bottom
+// centre and a carpet runner leading into the room. Keeping the shell identical
+// makes the doors easy to line up and avoids collision surprises.
+
+const kaelHomeRows = interiorRows(24, 14);
+setRect(kaelHomeRows, 11, 8, 2, 5, 'c');
+
+export const HOUSE_KAEL = {
+  id: 'house_kael', name: 'Casa de Kael', theme: 'interior', bgm: 'village', ambient: 'dust',
+  w: 24, h: 14, ground: strings(kaelHomeRows), spawn: { x: 11, y: 12, dir: 'up' },
+  props: [
+    { t: 'bed', x: 2, y: 2 },
+    { t: 'table', x: 8, y: 4 },
+    { t: 'shelf', x: 19, y: 1 },
+    { t: 'crate', x: 20, y: 9 }, { t: 'barrel', x: 21, y: 10 },
+    { t: 'plant', x: 3, y: 9 }, { t: 'plant', x: 20, y: 6 },
+    { t: 'torch', x: 2, y: 10 }, { t: 'torch', x: 21, y: 2 },
+    { t: 'door', x: 11, y: 13 }, { t: 'door', x: 12, y: 13 },
+  ],
+  npcs: [
+    { id: 'sena', sprite: 'sena', x: 13, y: 5, dir: 'down', name: 'Sena', talk: 'sena_home' },
+  ],
+  portals: [{ x: 11, y: 13, w: 2, h: 1, to: 'village', tx: 5, ty: 18, dir: 'down' }],
+  chests: [{ id: 'h_kael_chest', x: 20, y: 3, item: 'potion', n: 1 }],
+  triggers: [],
+};
+
+const elderHomeRows = interiorRows(24, 14);
+setRect(elderHomeRows, 11, 8, 2, 5, 'c');
+
+export const HOUSE_ELDER = {
+  id: 'house_elder', name: 'Casa da Anciã', theme: 'interior', bgm: 'village', ambient: 'dust',
+  w: 24, h: 14, ground: strings(elderHomeRows), spawn: { x: 11, y: 12, dir: 'up' },
+  props: [
+    { t: 'bed', x: 2, y: 2 },
+    { t: 'table', x: 8, y: 4 },
+    { t: 'shelf', x: 19, y: 1 },
+    { t: 'crystal', x: 20, y: 9 },
+    { t: 'plant', x: 3, y: 9 },
+    { t: 'torch', x: 2, y: 10 }, { t: 'torch', x: 21, y: 2 },
+    { t: 'door', x: 11, y: 13 }, { t: 'door', x: 12, y: 13 },
+  ],
+  npcs: [
+    { id: 'nina', sprite: 'nina', x: 13, y: 5, dir: 'down', name: 'Nina', talk: 'nina_home' },
+  ],
+  portals: [{ x: 11, y: 13, w: 2, h: 1, to: 'village', tx: 5, ty: 6, dir: 'down' }],
+  chests: [{ id: 'h_elder_chest', x: 20, y: 3, item: 'ether', n: 1 }],
+  triggers: [],
+};
+
+const smithyRows = interiorRows(24, 14);
+setRect(smithyRows, 11, 8, 2, 5, 'c');
+
+export const SMITHY = {
+  id: 'smithy', name: 'Ferraria de Haldor', theme: 'interior', bgm: 'village', ambient: 'embers',
+  w: 24, h: 14, ground: strings(smithyRows), spawn: { x: 11, y: 12, dir: 'up' },
+  props: [
+    { t: 'forge', x: 3, y: 2 },
+    { t: 'anvil', x: 7, y: 5 },
+    { t: 'counter', x: 15, y: 6 },
+    { t: 'shelf', x: 19, y: 1 },
+    { t: 'crate', x: 20, y: 10 }, { t: 'barrel', x: 21, y: 10 }, { t: 'barrel', x: 21, y: 11 },
+    { t: 'torch', x: 10, y: 1 }, { t: 'torch', x: 2, y: 10 },
+    { t: 'door', x: 11, y: 13 }, { t: 'door', x: 12, y: 13 },
+  ],
+  npcs: [
+    { id: 'haldor', sprite: 'villager1', x: 16, y: 5, dir: 'down', name: 'Haldor', talk: 'blacksmith_village' },
+  ],
+  portals: [{ x: 11, y: 13, w: 2, h: 1, to: 'village', tx: 23, ty: 6, dir: 'down' }],
+  chests: [],
+  triggers: [],
+};
+
+const shopRows = interiorRows(24, 14);
+setRect(shopRows, 11, 8, 2, 5, 'c');
+
+export const SHOP = {
+  id: 'shop', name: 'Empório de Tolan', theme: 'interior', bgm: 'village', ambient: 'dust',
+  w: 24, h: 14, ground: strings(shopRows), spawn: { x: 11, y: 12, dir: 'up' },
+  props: [
+    { t: 'shelf', x: 3, y: 1 }, { t: 'shelf', x: 7, y: 1 },
+    { t: 'shelf', x: 11, y: 1 }, { t: 'shelf', x: 15, y: 1 },
+    { t: 'counter', x: 10, y: 6 },
+    { t: 'table', x: 2, y: 9 },
+    { t: 'plant', x: 2, y: 2 },
+    { t: 'crate', x: 20, y: 2 }, { t: 'barrel', x: 21, y: 10 },
+    { t: 'torch', x: 2, y: 12 }, { t: 'torch', x: 21, y: 12 },
+    { t: 'door', x: 11, y: 13 }, { t: 'door', x: 12, y: 13 },
+  ],
+  npcs: [
+    { id: 'tolan', sprite: 'merchant', x: 11, y: 5, dir: 'down', name: 'Tolan', talk: 'merchant_village' },
+  ],
+  portals: [{ x: 11, y: 13, w: 2, h: 1, to: 'village', tx: 23, ty: 18, dir: 'down' }],
+  chests: [],
+  triggers: [],
+};
 
 // ---------------------------------------------------------------- FOREST
 const forestRows = fill(26, 18, '.');
@@ -319,6 +436,7 @@ export const CASTLE = {
 export const MAPS = {
   village: VILLAGE, forest: FOREST, shrine: SHRINE, prison: PRISON,
   mountain: MOUNTAIN, temple: TEMPLE, village_night: VILLAGE_NIGHT, castle: CASTLE,
+  house_kael: HOUSE_KAEL, house_elder: HOUSE_ELDER, smithy: SMITHY, shop: SHOP,
 };
 
 export function getMap(id) { return MAPS[id]; }

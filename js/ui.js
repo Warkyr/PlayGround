@@ -10,6 +10,7 @@ const SPEAKER_SPRITE = {
   'Kael': 'kael', 'Lyra': 'lyra', 'Dorian': 'dorian', 'Garrick': 'garrick', 'Mira': 'mira',
   'Anciã Maeve': 'elder', 'Maeve': 'elder', 'Tolan': 'merchant', 'Pip': 'child',
   'Haldor': 'villager1', 'Ferreira Anka': 'villager3',
+  'Sena': 'sena', 'Nina': 'nina', 'Bento': 'villager1',
   'Brann': 'resistance', 'Sir Varek': 'champion', 'Varek': 'champion',
   'Guarda': 'guard', 'Guarda Real': 'guard', 'Carcereiro Groth': 'jailer',
   'Narrador': null, '???': null,
