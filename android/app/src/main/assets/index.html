@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#070a14" />
+<meta name="description" content="Lâmina do Amanhecer — um RPG 2D de turnos sobre traição, cinzas e recomeço." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23070a14'/%3E%3Cpath d='M16 4l3 15-3 9-3-9z' fill='%23e7c77b'/%3E%3Cpath d='M10 17h12' stroke='%23e7c77b' stroke-width='2'/%3E%3C/svg%3E" />
+<title>Lâmina do Amanhecer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+  <canvas id="game" aria-label="Mundo do jogo"></canvas>
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+
+  <div id="ui">
+    <div id="hud" class="hidden" aria-live="polite">
+      <div class="hud-top">
+        <div class="hud-chapter">
+          <span class="hud-kicker" id="hud-chapter">Capítulo I</span>
+          <span class="hud-quest" id="hud-quest">—</span>
+        </div>
+        <div class="hud-right">
+          <div class="hud-gold" title="Ouro"><span class="coin">◈</span><span id="hud-gold">0</span></div>
+          <button id="hud-mute" class="icon-btn" title="Som" aria-label="Alternar som">♪</button>
+          <button id="hud-menu" class="icon-btn" title="Menu (Esc)" aria-label="Abrir menu">☰</button>
+        </div>
+      </div>
+      <div id="hud-party"></div>
+    </div>
+
+    <div id="dialogue" class="hidden" role="dialog" aria-live="polite">
+      <div class="dlg-frame">
+        <div class="dlg-portrait"><canvas id="portrait" width="72" height="72"></canvas></div>
+        <div class="dlg-body">
+          <div class="dlg-name"><span id="speaker">Kael</span></div>
+          <p id="dialogue-text"></p>
+          <div class="dlg-advance" id="dlg-advance">▼</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="battle-ui" class="hidden"></div>
+    <div id="screen-layer" class="hidden"></div>
+    <div id="choice-layer"></div>
+    <div id="toast-layer"></div>
+
+    <div id="touch-controls" class="hidden">
+      <div class="dpad" id="dpad">
+        <button class="dpad-btn up" data-dir="up" aria-label="Cima">▲</button>
+        <button class="dpad-btn left" data-dir="left" aria-label="Esquerda">◀</button>
+        <button class="dpad-btn right" data-dir="right" aria-label="Direita">▶</button>
+        <button class="dpad-btn down" data-dir="down" aria-label="Baixo">▼</button>
+      </div>
+      <div class="touch-actions">
+        <button class="touch-btn b" id="touch-b" aria-label="Menu / Voltar">B</button>
+        <button class="touch-btn a" id="touch-a" aria-label="Confirmar / Interagir">A</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="fade" aria-hidden="true"></div>
+  <div id="rotate-hint" aria-hidden="true">
+    <div class="rotate-icon">⟳</div>
+    <p>Gire o dispositivo para uma experiência mais ampla.</p>
+    <button id="rotate-dismiss">Continuar assim</button>
+  </div>
+</div>
+
+<noscript>Este jogo precisa de JavaScript ativado.</noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
