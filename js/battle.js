@@ -62,37 +62,79 @@ function effectColor(fx) {
   }
 }
 
-function fxFor(state, fx, targets, source) {
+function fxFor(state, fx, targets, source, kind) {
   if (!state.fx) return;
   const color = effectColor(fx);
   const all = fx && fx.endsWith('All');
   const list = all ? targets : targets.slice(0, 3);
+  const srcPos = source ? battleActorPos(source) : null;
+  const magical = kind === 'mag';
+  const healing = kind === 'heal' || kind === 'healAll' || kind === 'revive';
+  const buffing = kind === 'buff' || kind === 'debuff';
+
+  // Magic spells launch a visible bolt toward each target; the impact burst is
+  // spawned by damageTarget when the bolt lands, so it never explodes early.
+  if (magical) {
+    if (srcPos) {
+      state.fx.ring(srcPos.x, srcPos.y, { r0: 6, r1: 46, color, width: 3 });
+      state.fx.burst(srcPos.x, srcPos.y, { count: 8, colors: [color, '#ffffff'], speedMin: 10, speedMax: 60, gravity: -30, glow: true });
+    }
+    for (const t of list) {
+      if (!t || !srcPos) continue;
+      const p = battleActorPos(t);
+      state.fx.projectile(srcPos.x, srcPos.y, p.x, p.y, { color, max: 0.24, size: 7 });
+    }
+    return;
+  }
+
+  // Heals and revives (including Lyra's holy heal-all) glow over their targets
+  // instead of flying as a bolt, regardless of the FX name they use.
+  if (healing) {
+    for (const t of list) {
+      if (!t) continue;
+      const p = battleActorPos(t);
+      state.fx.burst(p.x, p.y, { count: 16, colors: ['#7ddba0', '#d8ffe0', '#ffe6a0'], speedMin: 15, speedMax: 60, gravity: -55, glow: true });
+      state.fx.ring(p.x, p.y, { r0: 8, r1: 60, color: '#8fe3ac' });
+    }
+    if (kind === 'revive' || fx === 'holyAll') state.fx.flashScreen('#dfffe8', 0.16, 0.2);
+    return;
+  }
+
+  if (buffing) {
+    for (const t of list) {
+      if (!t) continue;
+      const p = battleActorPos(t);
+      if (kind === 'debuff' || fx === 'debuff') {
+        state.fx.burst(p.x, p.y, { count: 14, colors: ['#c08a8a', '#8a6a8a'], speedMin: 10, speedMax: 60, gravity: 40 });
+      } else {
+        state.fx.ring(p.x, p.y, { r0: 8, r1: 52, color });
+        state.fx.burst(p.x, p.y, { count: 12, colors: [color, '#ffffff'], speedMin: 10, speedMax: 60, gravity: -30 });
+      }
+    }
+    return;
+  }
+
+  // Physical blows: every weapon hit flashes an arc, even elemental ones such
+  // as Kael's holy blade or a wraith's dark claw.
   for (const t of list) {
     if (!t) continue;
     const p = battleActorPos(t);
-    if (fx === 'slash') {
-      state.fx.slash(p.x, p.y, rand(-0.7, 0.7), { len: 110, color });
-    } else if (fx === 'quake') {
+    if (fx === 'quake') {
       state.fx.ring(p.x, p.y + 20, { r0: 10, r1: 90, color: '#c9a44c', width: 4 });
       state.fx.burst(p.x, p.y + 20, { count: 16, colors: ['#9a8258', '#6e5c42'], speedMin: 30, speedMax: 130, gravity: 140 });
-    } else if (fx === 'heal') {
-      state.fx.burst(p.x, p.y, { count: 14, colors: ['#7ddba0', '#d8ffe0'], speedMin: 15, speedMax: 55, gravity: -50, glow: true });
-      state.fx.ring(p.x, p.y, { r0: 8, r1: 55, color });
-    } else if (fx === 'shield' || fx === 'buff') {
-      state.fx.ring(p.x, p.y, { r0: 8, r1: 52, color });
-      state.fx.burst(p.x, p.y, { count: 12, colors: [color, '#ffffff'], speedMin: 10, speedMax: 60, gravity: -30 });
-    } else if (fx === 'debuff') {
-      state.fx.burst(p.x, p.y, { count: 14, colors: ['#c08a8a', '#8a6a8a'], speedMin: 10, speedMax: 60, gravity: 40 });
+    } else if (fx === 'slash' || fx === 'holy' || fx === 'holyAll' || fx === 'dark' || fx === 'fire' || fx === 'ice') {
+      state.fx.strike(p.x, p.y, { angle: rand(-0.5, 0.5), len: 128, color });
+      state.fx.slash(p.x, p.y, rand(-0.8, 0.8), { len: 96, color: '#ffffff', width: 3 });
     } else {
       state.fx.burst(p.x, p.y, { count: all ? 12 : 20, colors: [color, '#ffffff'], speedMin: 30, speedMax: 160, gravity: 40, glow: true });
       state.fx.ring(p.x, p.y, { r0: 6, r1: all ? 60 : 80, color });
     }
   }
   if (fx === 'quake') state.fx.shake(7, 0.28);
-  if (fx === 'holyAll') state.fx.flashScreen('#ffe6a0', 0.25, 0.3);
+  if (fx === 'holyAll') state.fx.flashScreen('#ffe6a0', 0.2, 0.24);
   if (source) {
     const p = battleActorPos(source);
-    if (fx === 'slash') state.fx.slash(p.x + 20, p.y, -0.4, { len: 70, color: '#fff6d8' });
+    state.fx.burst(p.x, p.y, { count: 6, colors: ['#fff6d8', color], speedMin: 20, speedMax: 70, gravity: 40 });
   }
 }
 
@@ -117,14 +159,29 @@ function damageTarget(state, source, target, amount, opts = {}) {
   target.hp = Math.max(0, target.hp - amount);
   target.flashT = 0.24;
   const p = battleActorPos(target);
+  const color = opts.color || elementColor(opts.element || 'none');
   state.fx.number(p.x, p.y, String(amount), {
-    color: opts.color || elementColor(opts.element || 'none'),
+    color,
     crit: !!opts.crit,
     size: opts.crit ? 34 : 26,
   });
+  // Every landed hit recoils the target and throws sparks, so blows read as
+  // contact rather than a number appearing over a static sprite.
+  if (source) {
+    target.recoil = { t: 0, dur: 0.24, dir: source.isEnemy ? -1 : 1, mag: opts.crit ? 16 : 10 };
+    state.fx.burst(p.x, p.y, {
+      count: opts.crit ? 22 : 12,
+      colors: [color, '#ffffff'],
+      speedMin: 40,
+      speedMax: opts.crit ? 190 : 140,
+      gravity: 70,
+      glow: true,
+    });
+    state.fx.shake(opts.crit ? 7 : 3.5, opts.crit ? 0.2 : 0.12);
+  }
   if (opts.crit) {
-    state.fx.ring(p.x, p.y, { r0: 8, r1: 70, color: '#ffe6a0', width: 4 });
-    state.fx.shake(6, 0.22);
+    state.fx.ring(p.x, p.y, { r0: 8, r1: 90, color: '#ffe6a0', width: 4 });
+    state.fx.flashScreen('#ffe6a0', 0.14, 0.1);
   }
   if (target.hp <= 0) {
     logMsg(state, `${target.name} cai.`);
@@ -194,18 +251,21 @@ async function performSkill(state, actor, sid, chosen = null, auto = false) {
     return;
   }
   if (sk.cost) actor.mp = Math.max(0, actor.mp - sk.cost);
+  const isMagic = sk.kind === 'mag';
   state.phase = 'action';
   state.current = actor;
-  actor.anim = { t: 0, dur: 0.34, dx: actor.isEnemy ? -30 : 34 };
+  // Melee skills dash toward the target; casters only lean forward.
+  actor.anim = { t: 0, dur: 0.36, dx: isMagic ? 14 : (actor.isEnemy ? -70 : 70) };
   audio.sfx(sk.sfx || 'hit');
   logMsg(state, `${actor.name} usa <b>${sk.name}</b>!`);
   syncHUD(state);
-  await wait(300);
+  await wait(isMagic ? 220 : 300);
 
   const targets = resolveTargets(state, actor, sk, chosen);
-  fxFor(state, sk.fx, targets.length ? targets : [actor], actor);
+  fxFor(state, sk.fx, targets.length ? targets : [actor], actor, sk.kind);
 
   if (sk.kind === 'phys' || sk.kind === 'mag') {
+    if (isMagic) await wait(240); // let the bolt reach the target
     for (const target of targets) {
       const { amount, crit, element } = computeDamage(state, actor, target, sk);
       damageTarget(state, actor, target, amount, { crit, element });
@@ -254,16 +314,16 @@ async function basicAttack(state, actor, target) {
   const sk = { name: 'Ataque', kind: 'phys', power: 1, element: 'none', fx: 'slash', sfx: 'hit' };
   state.phase = 'action';
   state.current = actor;
-  actor.anim = { t: 0, dur: 0.3, dx: actor.isEnemy ? -30 : 34 };
+  actor.anim = { t: 0, dur: 0.34, dx: actor.isEnemy ? -70 : 70 };
   audio.sfx('hit');
   logMsg(state, `${actor.name} ataca!`);
   syncHUD(state);
-  await wait(250);
-  fxFor(state, 'slash', [target], actor);
+  await wait(260);
+  fxFor(state, 'slash', [target], actor, 'phys');
   const { amount, crit, element } = computeDamage(state, actor, target, sk);
   damageTarget(state, actor, target, amount, { crit, element });
   syncHUD(state);
-  await wait(320);
+  await wait(340);
 }
 
 async function pickPlayerTarget(state, actor, sk) {

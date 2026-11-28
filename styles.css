@@ -227,6 +227,30 @@ button{font-family:inherit;color:inherit;}
 }
 .battle-command:empty{display:none;}
 .battle-command:before{content:'';position:absolute;inset:3px;border:1px solid rgba(255,232,170,.08);pointer-events:none;}
+
+/* Bottom-left column: party busts above the command text. */
+.battle-left{
+  position:absolute;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));
+  width:min(500px,48vw);display:flex;flex-direction:column;gap:8px;align-items:stretch;z-index:4;
+}
+.battle-left .battle-command{position:static;left:auto;bottom:auto;width:100%;}
+.battle-left .battle-command.with-party{width:100%;}
+.battle-cast{
+  display:flex;gap:7px;padding:7px 8px;pointer-events:none;align-self:flex-start;
+  background:linear-gradient(180deg,rgba(10,17,32,.92),rgba(6,11,22,.84));
+  border:1px solid rgba(231,199,123,.3);border-left:3px solid var(--gold-dim);
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
+}
+.battle-cast:empty{display:none;}
+.cast-member{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.cast-member canvas{
+  width:48px;height:48px;image-rendering:pixelated;background:#0a1020;
+  border:1px solid rgba(231,199,123,.25);transition:border-color .15s,box-shadow .15s;
+}
+.cast-member span{font-family:var(--pixel);font-size:6px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;}
+.cast-member.active canvas{border-color:var(--gold);box-shadow:0 0 12px rgba(231,199,123,.45);}
+.cast-member.active span{color:var(--gold);}
+.cast-member.dead{opacity:.4;filter:grayscale(1);}
 .cmd-head{font-family:var(--pixel);font-size:8px;color:var(--gold);letter-spacing:1px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;}
 .cmd-head .hint{font-family:var(--body);font-size:15px;color:var(--muted);letter-spacing:0;}
 .cmd-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
@@ -542,8 +566,11 @@ button{font-family:inherit;color:inherit;}
   .battle-unit .bu-face{width:26px;height:26px;}
   .bu-name{font-size:5.5px;}
   .bu-name span{font-size:12px;}
-  .battle-command{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:auto;padding:8px;max-height:44vh;overflow:auto;}
-  .battle-command.with-party{bottom:max(10px,env(safe-area-inset-bottom));width:62vw;}
+  .battle-left{left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:auto;gap:6px;}
+  .battle-left .battle-command{padding:8px;max-height:44vh;overflow:auto;}
+  .battle-cast{padding:5px 6px;gap:5px;}
+  .cast-member canvas{width:38px;height:38px;}
+  .cast-member span{font-size:5px;}
   .cmd-head{font-size:6.5px;margin-bottom:6px;}
   .cmd-grid{grid-template-columns:1fr 1fr;gap:4px;}
   .cmd-btn{font-size:16px;padding:7px 8px;min-height:34px;}
@@ -593,6 +620,22 @@ button{font-family:inherit;color:inherit;}
   .quest-banner{font-size:16px;padding:7px 10px;}
   .minimap-legend{font-size:12px;gap:5px 10px;}
   .minimap-hint{font-size:13px;}
+
+  /* Short landscape battle: keep the log, party busts and command panel from
+     colliding while leaving the enemies visible. */
+  .battle-log{width:52vw;min-height:58px;padding:7px 10px;}
+  .battle-log p{font-size:14px;}
+  .battle-left{gap:6px;}
+  .battle-cast{padding:4px 6px;gap:5px;}
+  .cast-member canvas{width:34px;height:34px;}
+  .cast-member span{font-size:5px;}
+  .battle-left .battle-command{padding:8px;}
+  .cmd-head{font-size:6px;margin-bottom:5px;}
+  .cmd-grid{gap:4px;}
+  .cmd-btn{font-size:15px;padding:5px 7px;min-height:28px;}
+  .cmd-desc{font-size:13px;min-height:20px;margin-top:5px;padding-top:4px;}
+  .cmd-footer{margin-top:5px;bottom:-8px;}
+  .cmd-confirm,.cmd-back{min-height:30px;font-size:14px;padding:4px 8px;}
 }
 @media (max-width:520px){
   /* Phones: keep the party status in a compact bottom row and lift the
@@ -606,14 +649,12 @@ button{font-family:inherit;color:inherit;}
   .bu-name{font-size:5px;gap:3px;}
   .bu-name span{font-size:11px;}
   .bu-status{display:none;}
-  .battle-command{
-    left:10px;right:10px;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 56px);
-    width:auto;max-height:50vh;
-  }
-  .battle-command.with-party{
+  .battle-left{
+    left:10px;right:10px;
     bottom:calc(max(10px,env(safe-area-inset-bottom)) + 56px);
     width:auto;
   }
+  .battle-left .battle-command{max-height:50vh;}
   .turn-order{display:none;}
   .boss-hud{top:88px;width:88vw;padding:6px 9px;}
   .bh-top{font-size:7px;margin-bottom:4px;}

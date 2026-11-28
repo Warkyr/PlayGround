@@ -24,13 +24,17 @@ export function setupBattleUI(state) {
       <div class="bar boss"><i id="boss-fill"></i></div>
     </div>
     <div class="battle-party" id="battle-party"></div>
-    <div class="battle-command" id="battle-command"></div>
+    <div class="battle-left" id="battle-left">
+      <div class="battle-cast" id="battle-cast"></div>
+      <div class="battle-command" id="battle-command"></div>
+    </div>
     <div id="battle-target-layer"></div>`;
   state.ui = {
     root,
     log: el('#battle-log'),
     order: el('#turn-order'),
     party: el('#battle-party'),
+    cast: el('#battle-cast'),
     command: el('#battle-command'),
     target: el('#battle-target-layer'),
     boss: el('#boss-hud'),
@@ -126,9 +130,26 @@ export function layoutBattle(state) {
   });
 }
 
+// Pixel-art busts of the main characters, shown in the bottom-left above the
+// command text. The member whose turn it is gets a gold frame.
+function renderCast(state) {
+  const cast = state.ui.cast;
+  if (!cast) return;
+  cast.innerHTML = state.allies.map((m) => `
+    <div class="cast-member ${state.current === m ? 'active' : ''} ${m.hp <= 0 ? 'dead' : ''}" title="${m.name}">
+      <canvas width="48" height="48" data-castface="${m.id}"></canvas>
+      <span>${m.name}</span>
+    </div>`).join('');
+  state.allies.forEach((m) => {
+    const cv = cast.querySelector(`[data-castface="${m.id}"]`);
+    if (cv) cv.getContext('2d').drawImage(getPortrait(m.sprite, 96), 0, 0, 48, 48);
+  });
+}
+
 export function syncHUD(state) {
   if (!state.ui) return;
   layoutBattle(state);
+  renderCast(state);
   const party = state.ui.party;
   party.innerHTML = state.allies.map((m) => `
     <div class="battle-unit ${state.current === m ? 'active' : ''} ${m.hp <= 0 ? 'dead' : ''}" data-ally="${m.id}">
@@ -450,6 +471,10 @@ export function drawBattleFrame(state, now) {
       a.anim.t += dt;
       if (a.anim.t >= a.anim.dur) a.anim = null;
     }
+    if (a.recoil) {
+      a.recoil.t += dt;
+      if (a.recoil.t >= a.recoil.dur) a.recoil = null;
+    }
   }
 
   const shake = state.fx.offset();
@@ -466,8 +491,23 @@ export function drawBattleFrame(state, now) {
       dx = (m.anim.dx || 34) * p;
       dy = -6 * p;
     }
+    let rx = 0;
+    if (m.recoil) {
+      const p = Math.sin(clamp(m.recoil.t / m.recoil.dur, 0, 1) * Math.PI);
+      rx = m.recoil.dir * m.recoil.mag * p;
+    }
     const bob = Math.sin(state.time * 2 + (m.id.length)) * 1.2;
-    drawCharacter(g, m.sprite, m.bx + dx, m.by + bob + dy, 'right', 0, m.bs, { flash: m.flashT > 0 });
+    // Dash afterimages sell the lunge toward the enemy.
+    if (m.anim) {
+      const base = m.anim.t / m.anim.dur;
+      for (let k = 3; k >= 1; k--) {
+        const pk = base - k * 0.05;
+        if (pk < 0) continue;
+        const pp = Math.sin(clamp(pk, 0, 1) * Math.PI);
+        drawCharacter(g, m.sprite, m.bx + (m.anim.dx || 34) * pp, m.by + bob, 'right', 0, m.bs, { alpha: 0.08 * (4 - k) });
+      }
+    }
+    drawCharacter(g, m.sprite, m.bx + dx + rx, m.by + bob + dy, 'right', 0, m.bs, { flash: m.flashT > 0 });
     if (state.current === m && state.phase === 'command') {
       g.fillStyle = 'rgba(231,199,123,.85)';
       const ay = m.by - 28 * m.bs - 18 + Math.sin(state.time * 4) * 3;
@@ -484,10 +524,15 @@ export function drawBattleFrame(state, now) {
   // enemies
   for (const e of state.enemies) {
     if (e.hp <= 0 && !e.deadDrawn) continue;
-    let dx = 0, dy = 0;
+    let dx = 0;
     if (e.anim) {
       const p = Math.sin(clamp(e.anim.t / e.anim.dur, 0, 1) * Math.PI);
       dx = (e.anim.dx || -34) * p;
+    }
+    let rx = 0;
+    if (e.recoil) {
+      const p = Math.sin(clamp(e.recoil.t / e.recoil.dur, 0, 1) * Math.PI);
+      rx = e.recoil.dir * e.recoil.mag * p;
     }
     if (e.hp <= 0) {
       g.save(); g.globalAlpha = Math.max(0, 0.35 - (e.deadT || 0) * 0.1);
@@ -496,7 +541,16 @@ export function drawBattleFrame(state, now) {
       e.deadT = (e.deadT || 0) + dt;
       continue;
     }
-    drawEnemy(g, e.id, e.x + dx, e.y, e.scale, state.time, { flash: e.flashT > 0, phase: e.bobPhase });
+    if (e.anim) {
+      const base = e.anim.t / e.anim.dur;
+      for (let k = 3; k >= 1; k--) {
+        const pk = base - k * 0.05;
+        if (pk < 0) continue;
+        const pp = Math.sin(clamp(pk, 0, 1) * Math.PI);
+        drawEnemy(g, e.id, e.x + (e.anim.dx || -34) * pp, e.y, e.scale, state.time, { alpha: 0.08 * (4 - k), bob: false });
+      }
+    }
+    drawEnemy(g, e.id, e.x + dx + rx, e.y, e.scale, state.time, { flash: e.flashT > 0, phase: e.bobPhase });
     // HP bar — anchored to the sprite's real drawn height so it never floats.
     // Bosses already have the top strip, so skip the duplicate world-space bar.
     const bw = clamp((e.drawW || e.scale * 30) * 0.92, 50, 190);

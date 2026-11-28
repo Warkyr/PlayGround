@@ -1,5 +1,5 @@
 // art/scenes.js — title backdrop, battle arenas, particles
-import { rand, randInt, hash2 } from '../util.js';
+import { rand, randInt, hash2, clamp } from '../util.js';
 import { hexA } from './characters.js';
 
 // ---------------- Effects ----------------
@@ -8,13 +8,19 @@ export class FX {
     this.particles = [];
     this.numbers = [];
     this.slashes = [];
+    this.strikes = [];
+    this.projectiles = [];
     this.rings = [];
     this.flash = null;
     this.shakeT = 0;
     this.shakeDur = 1;
     this.shakeMag = 0;
   }
-  clear() { this.particles.length = 0; this.numbers.length = 0; this.slashes.length = 0; this.rings.length = 0; this.flash = null; this.shakeT = 0; }
+  clear() {
+    this.particles.length = 0; this.numbers.length = 0; this.slashes.length = 0;
+    this.strikes.length = 0; this.projectiles.length = 0; this.rings.length = 0;
+    this.flash = null; this.shakeT = 0;
+  }
 
   burst(x, y, opts = {}) {
     const n = opts.count ?? 16;
@@ -47,6 +53,22 @@ export class FX {
     this.slashes.push({
       x, y, angle, len: opts.len || 90, life: 0, max: opts.max || 0.32,
       color: opts.color || '#fff6d8', width: opts.width || 4,
+    });
+  }
+
+  // A multi-arc weapon strike: a bright core arc plus a coloured bloom.
+  strike(x, y, opts = {}) {
+    this.strikes.push({
+      x, y, angle: opts.angle || 0, len: opts.len || 120,
+      color: opts.color || '#fff6d8', life: 0, max: opts.max || 0.38,
+    });
+  }
+
+  // A magic bolt that travels from caster to target with a fading trail.
+  projectile(x0, y0, x1, y1, opts = {}) {
+    this.projectiles.push({
+      x0, y0, x1, y1, life: 0, max: opts.max || 0.24,
+      color: opts.color || '#8ad8ff', size: opts.size || 7, arc: opts.arc ?? 22,
     });
   }
 
@@ -88,6 +110,14 @@ export class FX {
       const s = this.slashes[i]; s.life += dt;
       if (s.life >= s.max) this.slashes.splice(i, 1);
     }
+    for (let i = this.strikes.length - 1; i >= 0; i--) {
+      const s = this.strikes[i]; s.life += dt;
+      if (s.life >= s.max) this.strikes.splice(i, 1);
+    }
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i]; p.life += dt;
+      if (p.life >= p.max) this.projectiles.splice(i, 1);
+    }
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]; r.life += dt;
       if (r.life >= r.max) this.rings.splice(i, 1);
@@ -125,6 +155,51 @@ export class FX {
       g.beginPath(); g.arc(0, 0, s.len * 0.5, -0.9, 0.9); g.stroke();
       g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = Math.max(1, s.width * 0.35);
       g.beginPath(); g.arc(0, 0, s.len * 0.5, -0.8, 0.8); g.stroke();
+      g.restore();
+    }
+    // Weapon strikes: three crossing arcs that swell and fade together.
+    for (const s of this.strikes) {
+      const t = clamp(s.life / s.max, 0, 1);
+      const a = Math.sin(t * Math.PI);
+      g.save();
+      g.translate(s.x, s.y);
+      g.globalCompositeOperation = 'lighter';
+      const arcs = [[-0.62, 1], [0.62, -1], [0, 1]];
+      for (const [ang, dir] of arcs) {
+        g.save();
+        g.rotate(s.angle + ang);
+        g.strokeStyle = s.color;
+        g.lineWidth = 10 * (1 - t * 0.5);
+        g.globalAlpha = a * 0.3;
+        g.beginPath(); g.arc(0, 0, s.len * 0.44, -1.05 * dir, 1.05 * dir, dir < 0); g.stroke();
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 4.5 * (1 - t * 0.5);
+        g.globalAlpha = a;
+        g.beginPath(); g.arc(0, 0, s.len * 0.44, -1.0 * dir, 1.0 * dir, dir < 0); g.stroke();
+        g.restore();
+      }
+      g.restore();
+    }
+    // Magic bolts with a short comet trail.
+    for (const p of this.projectiles) {
+      const t = clamp(p.life / p.max, 0, 1);
+      const x = p.x0 + (p.x1 - p.x0) * t;
+      const y = p.y0 + (p.y1 - p.y0) * t - Math.sin(t * Math.PI) * p.arc;
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      for (let k = 1; k <= 4; k++) {
+        const tt = Math.max(0, t - k * 0.045);
+        const tx = p.x0 + (p.x1 - p.x0) * tt;
+        const ty = p.y0 + (p.y1 - p.y0) * tt - Math.sin(tt * Math.PI) * p.arc;
+        g.globalAlpha = (1 - k / 5) * 0.5;
+        g.fillStyle = p.color;
+        g.beginPath(); g.arc(tx, ty, p.size * (1 - k / 6), 0, Math.PI * 2); g.fill();
+      }
+      g.globalAlpha = 0.95;
+      g.fillStyle = p.color;
+      g.beginPath(); g.arc(x, y, p.size, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath(); g.arc(x, y, p.size * 0.45, 0, Math.PI * 2); g.fill();
       g.restore();
     }
     for (const r of this.rings) {
